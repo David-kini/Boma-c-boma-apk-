@@ -49,7 +49,14 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		var d: Vector2 = target - s
 		cam.set("yaw", atan2(-d.x, -d.y))
 		cam.set("pitch", -0.12)
-	elif view == "front" or view == "side" or view == "back":
+	if args.has("at"):
+		var xz: PackedStringArray = String(args["at"]).split(",")
+		var wa: Node = player.get("world")
+		var ax: float = float(xz[0])
+		var az: float = float(xz[1])
+		player.global_position = Vector3(ax, float(wa.call("ground_height", ax, az)) + 0.3, az)
+		cam.global_position = player.global_position + Vector3(0.0, 1.5, 0.0)
+	if view == "front" or view == "side" or view == "back":
 		cam.set("pitch", -0.08)
 		cam.set("distance", 2.6)
 		var yaw: float = PI
@@ -66,6 +73,26 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		cam.set("pitch", float(args["pitch"]))
 	if args.has("yaw"):
 		cam.set("yaw", float(args["yaw"]))
+	if args.has("pivot"):
+		cam.set("pivot_height", float(args["pivot"]))
+		cam.global_position = player.global_position + Vector3(0.0, float(args["pivot"]), 0.0)
+	if args.has("noshadow"):
+		var wn: Node = player.get("world")
+		(wn.get("sun") as DirectionalLight3D).shadow_enabled = false
+	if args.has("sbias"):
+		var bb: PackedStringArray = String(args["sbias"]).split(",")
+		var wb: Node = player.get("world")
+		var sl: DirectionalLight3D = wb.get("sun") as DirectionalLight3D
+		sl.shadow_bias = float(bb[0])
+		sl.shadow_normal_bias = float(bb[1])
+	if args.has("nofill"):
+		var wf: Node = player.get("world")
+		(wf.get_node("LumiereAppoint") as DirectionalLight3D).visible = false
+	if args.has("nosun"):
+		var wn2: Node = player.get("world")
+		(wn2.get("sun") as DirectionalLight3D).visible = false
+	if args.has("fov"):
+		(cam.get("camera") as Camera3D).fov = float(args["fov"])
 	if anim != "":
 		player.set("debug_anim", anim)
 

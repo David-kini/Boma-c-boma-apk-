@@ -95,6 +95,7 @@ func _build_blade(e: Dictionary) -> void:
 	core.name = "Lame"
 	core.mesh = _blade_mesh(1.0, 0.014)
 	core.material_override = _unshaded(e["core"], false)
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(core)
 	var glow: MeshInstance3D = MeshInstance3D.new()
 	glow.name = "Halo"
@@ -109,6 +110,7 @@ func _add(mesh: Mesh, xf: Transform3D, mat: Material) -> void:
 	mi.mesh = mesh
 	mi.transform = xf
 	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
 

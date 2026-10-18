@@ -11,8 +11,12 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Visage 3D et éclairage (v0.5)
+- Tête entièrement modélisée (hero_head.gd), plus de photo collée : crâne chauve, teint albinos, nez large, lèvres pleines, sourire, joues, oreilles, yeux en amande (iris, pupille, reflet, cils), sourcils clairs, narines, lunettes sans monture (verres teintés, barre et branches dorées).
+- Normales calculées exactement (tête et corps) ; ombres du soleil en 2 zones avec filtrage doux ; ombre douce sous les pieds à toutes les qualités ; lumière ambiante fixe et lumière d'appoint chaude ; pas de reflets du ciel (taches sur mobile, coûteux).
+
 ## Héros et caméra (v0.4)
-- Héros d'après le concept art : tête chauve avec le visage de la photo (texture recadrée, bords fondus), branches de lunettes dorées, chemise blanche, nœud papillon, gilet sombre à bordure et boutons dorés, long manteau noir à bordures et ourlet dorés, épaulières et brassards dorés, gants noirs, ceinture et boucle, pantalon, bottes à liseré doré.
+- Héros d'après le concept art : tête modélisée (voir v0.5), chemise blanche, nœud papillon, gilet sombre à bordure et boutons dorés, long manteau noir à bordures et ourlet dorés, épaulières et brassards dorés, gants noirs, ceinture et boucle, pantalon, bottes à liseré doré.
 - Corps en maillages skinnés (déformés par le Skeleton3D de 18 os) ; os du manteau animé (il vole en course, en saut et en chute).
 - Épée d'éclair (sword.gd) : lame dentelée lumineuse, halo additif, garde dorée en ailes, gemme, éclairs animés ; variantes feu et divin prêtes.
 - Caméra : suivi fluide, recentrage automatique derrière le héros, zoom à la molette, collision, secousse.

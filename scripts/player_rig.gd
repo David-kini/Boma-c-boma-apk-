@@ -4,13 +4,13 @@ extends Node3D
 ##   esquive, réception) + os "coat" pour le mouvement du manteau.
 ## - Corps en MAILLAGES SKINNÉS (déformés par le squelette) : jambes/pantalon/bottes,
 ##   torse/chemise/ceinture, gilet ouvert, long manteau ouvert à bordures dorées, bras.
-## - Pièces rigides attachées aux os : tête (visage photo projeté), lunettes dorées,
-##   oreilles, col, nœud papillon, boutons, boucle, épaulières, brassards, gants, chaussures.
+## - Pièces rigides attachées aux os : tête modélisée (hero_head.gd : visage sculpté,
+##   yeux, oreilles, lunettes), col, nœud papillon, boutons, boucle, épaulières, brassards, gants, chaussures.
 ## - La tête est dans "head_slot" : remplaçable par un vrai modèle (replace_head).
 ## Le personnage regarde vers -Z, pieds à y = 0, taille ≈ 1,79 m.
 
-const FACE_PATH: String = "res://assets/textures/face.png"
-const SKIN: Color = Color(0.933, 0.604, 0.522)   # teinte mesurée sur la photo
+const HeroHead = preload("res://scripts/hero_head.gd")
+const SKIN: Color = Color(0.90, 0.68, 0.60)   # teint albinos (identique à hero_head.gd)
 const SHIRT: Color = Color(0.95, 0.95, 0.96)
 const VEST: Color = Color(0.13, 0.11, 0.10)
 const COAT: Color = Color(0.07, 0.065, 0.075)
@@ -21,7 +21,7 @@ const GOLD: Color = Color(0.93, 0.70, 0.26)
 const BLACK: Color = Color(0.04, 0.04, 0.05)
 const HIPS_REST: Vector3 = Vector3(0.0, 0.95, 0.0)
 const HEAD_RADII: Vector3 = Vector3(0.112, 0.134, 0.122)
-const HEAD_CENTER_Y: float = 0.115
+const HEAD_CENTER_Y: float = 0.112
 
 ## [nom, parent, position locale de repos]
 const BONE_DEF: Array = [
@@ -125,6 +125,7 @@ func _mat(key: String) -> StandardMaterial3D:
 	if materials.has(key):
 		return materials[key] as StandardMaterial3D
 	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.disable_receive_shadows = true
 	match key:
 		"body":
 			m.vertex_color_use_as_albedo = true
@@ -180,7 +181,10 @@ func _loft(rings: Array, segs: int, cap_top: bool, cap_bottom: bool, edge: float
 		us.sort()
 	var cols: int = us.size()
 	var vcount: int = 0
-	for ring in rings:
+	for ri in range(rings.size()):
+		var ring: Dictionary = rings[ri]
+		var prev_r: Dictionary = rings[maxi(ri - 1, 0)]
+		var next_r: Dictionary = rings[mini(ri + 1, rings.size() - 1)]
 		var open: float = float(ring.get("open", 0.0))
 		var a0: float = -PI * 0.5 + open
 		var a1: float = -PI * 0.5 + TAU - open
@@ -194,6 +198,7 @@ func _loft(rings: Array, segs: int, cap_top: bool, cap_bottom: bool, edge: float
 			if edge > 0.0 and (float(u) <= edge or float(u) >= 1.0 - edge):
 				col = edge_col
 			st.set_color(col)
+			st.set_normal(_ring_normal(prev_r, next_r, ring, th, x, z))
 			_set_skin(st, ring, x, z)
 			st.add_vertex(Vector3(x, float(ring["y"]), z))
 			vcount += 1
@@ -208,6 +213,7 @@ func _loft(rings: Array, segs: int, cap_top: bool, cap_bottom: bool, edge: float
 	if cap_top:
 		var r0: Dictionary = rings[0]
 		st.set_color(r0["col"])
+		st.set_normal(Vector3.UP)
 		_set_skin(st, r0, float(r0.get("cx", 0.0)), float(r0.get("cz", 0.0)))
 		st.add_vertex(Vector3(float(r0.get("cx", 0.0)), float(r0["y"]), float(r0.get("cz", 0.0))))
 		var ci: int = vcount
@@ -218,6 +224,7 @@ func _loft(rings: Array, segs: int, cap_top: bool, cap_bottom: bool, edge: float
 	if cap_bottom:
 		var rl: Dictionary = rings[rings.size() - 1]
 		st.set_color(rl["col"])
+		st.set_normal(Vector3.DOWN)
 		_set_skin(st, rl, float(rl.get("cx", 0.0)), float(rl.get("cz", 0.0)))
 		st.add_vertex(Vector3(float(rl.get("cx", 0.0)), float(rl["y"]), float(rl.get("cz", 0.0))))
 		var cb: int = vcount
@@ -225,8 +232,28 @@ func _loft(rings: Array, segs: int, cap_top: bool, cap_bottom: bool, edge: float
 		for j in range(cols - 1):
 			for idx in [cb, base + j + 1, base + j]:
 				st.add_index(idx)
-	st.generate_normals()
 	return st.commit()
+
+
+func _ring_point(r: Dictionary, th: float) -> Vector3:
+	var open: float = float(r.get("open", 0.0))
+	return Vector3(float(r.get("cx", 0.0)) + float(r["rx"]) * cos(th), float(r["y"]),
+		float(r.get("cz", 0.0)) + float(r["rz"]) * sin(th))
+
+
+## Normale exacte d'un sommet d'anneau : tangente autour de l'anneau x direction entre
+## anneaux voisins, orientée vers l'extérieur (loin de l'axe du tube).
+func _ring_normal(prev_r: Dictionary, next_r: Dictionary, ring: Dictionary, th: float,
+		x: float, z: float) -> Vector3:
+	var t_around: Vector3 = Vector3(-float(ring["rx"]) * sin(th), 0.0, float(ring["rz"]) * cos(th))
+	var t_down: Vector3 = _ring_point(next_r, th) - _ring_point(prev_r, th)
+	if t_down.length() < 0.0001:
+		t_down = Vector3(0.0, -1.0, 0.0)
+	var n: Vector3 = t_around.cross(t_down).normalized()
+	var out: Vector3 = Vector3(x - float(ring.get("cx", 0.0)), 0.0, z - float(ring.get("cz", 0.0)))
+	if n.dot(out) < 0.0:
+		n = -n
+	return n
 
 
 func _set_skin(st: SurfaceTool, ring: Dictionary, x: float, z: float) -> void:
@@ -491,36 +518,10 @@ func replace_head(new_head: Node3D) -> void:
 
 
 func _fill_default_head() -> void:
-	var I: Basis = Basis.IDENTITY
-	var skull: MeshInstance3D = MeshInstance3D.new()
-	skull.mesh = _ellipsoid(HEAD_RADII * 0.985, 2)
-	skull.material_override = _mat("skin")
-	head_slot.add_child(skull)
-	var face: MeshInstance3D = MeshInstance3D.new()
-	face.mesh = _ellipsoid(HEAD_RADII, 0)
-	var fm: StandardMaterial3D = StandardMaterial3D.new()
-	fm.roughness = 0.75
-	if ResourceLoader.exists(FACE_PATH):
-		# texture opaque : visage centré, bords fondus dans la couleur de peau
-		fm.albedo_texture = load(FACE_PATH) as Texture2D
-	else:
-		fm.albedo_color = SKIN
-	face.material_override = fm
-	head_slot.add_child(face)
-	# oreilles
-	for side in [-1.0, 1.0]:
-		var ear: MeshInstance3D = MeshInstance3D.new()
-		ear.mesh = _sphere(1.0, 8, 5)
-		ear.transform = _xf(I.scaled(Vector3(0.014, 0.03, 0.02)), Vector3(0.102 * float(side), 0.0, 0.012))
-		ear.material_override = _mat("skin")
-		head_slot.add_child(ear)
-	# lunettes : la monture et les verres sont sur la photo ; branches dorées en 3D
-	for side in [-1.0, 1.0]:
-		var temple: MeshInstance3D = MeshInstance3D.new()
-		temple.mesh = _boxm(Vector3(0.005, 0.006, 0.10))
-		temple.transform = _xf(I, Vector3(0.109 * float(side), 0.018, -0.045))
-		temple.material_override = _mat("gold")
-		head_slot.add_child(temple)
+	# tête modélisée en 3D (sculptée d'après la photo, aucune photo collée)
+	var head: Node3D = HeroHead.new()
+	head.name = "TeteHeros"
+	head_slot.add_child(head)
 
 
 ## Ellipsoïde. part : 0 = moitié avant (z < 0) avec UV de projection frontale,

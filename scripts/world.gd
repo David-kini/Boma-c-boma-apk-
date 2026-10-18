@@ -52,13 +52,10 @@ func _apply_quality(_level: int) -> void:
 	env.fog_density = GameSettings.fog_density()
 	if GameSettings.use_sky():
 		env.background_mode = Environment.BG_SKY
-		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	else:
 		# ciel remplacé par une couleur unie : moins coûteux
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = Color(0.66, 0.78, 0.92)
-		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.62, 0.68, 0.76)
 
 
 func _build_environment() -> void:
@@ -72,9 +69,16 @@ func _build_environment() -> void:
 	psm.ground_bottom_color = Color(0.25, 0.30, 0.38)
 	sky.sky_material = psm
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	# lumière ambiante de couleur fixe (celle calculée depuis le ciel fait des taches
+	# sur les visages avec le rendu mobile)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.80, 0.80, 0.86)
+	env.ambient_light_energy = 0.55
+	# pas de reflets du ciel : évite des taches sur les visages (rendu mobile) et coûte moins
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_white = 3.0
+	env.tonemap_exposure = 0.95
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.66, 0.78, 0.92)
 	env.fog_density = 0.0016
@@ -83,10 +87,25 @@ func _build_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48.0, -35.0, 0.0)
-	sun.light_energy = 1.25
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.light_color = Color(1.0, 0.96, 0.88)
+	sun.light_energy = 1.05
+	# ombres en 2 zones : très détaillées près de la caméra (visage, corps), plus
+	# grossières au loin ; filtrage doux (réglage du projet)
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_split_1 = 0.08
+	sun.shadow_bias = 0.04
+	sun.shadow_normal_bias = 1.2
+	sun.shadow_blur = 1.5
+	sun.light_color = Color(1.0, 0.95, 0.86)
 	add_child(sun)
+	# lumière d'appoint chaude, opposée au soleil, sans ombre (visages jamais tout bleus)
+	var fill: DirectionalLight3D = DirectionalLight3D.new()
+	fill.name = "LumiereAppoint"
+	fill.rotation_degrees = Vector3(-25.0, 150.0, 0.0)
+	fill.light_energy = 0.30
+	fill.light_color = Color(1.0, 0.85, 0.72)
+	fill.shadow_enabled = false
+	fill.light_specular = 0.2
+	add_child(fill)
 
 
 func _build_boundary_walls() -> void:

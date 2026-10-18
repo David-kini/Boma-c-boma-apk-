@@ -9,7 +9,6 @@ extends Node3D
 const SENSITIVITY: float = 0.005
 const PITCH_MIN: float = -1.2
 const PITCH_MAX: float = 0.35
-const PIVOT_HEIGHT: float = 1.5
 const DIST_MIN: float = 1.2
 const DIST_MAX: float = 7.0
 const AUTO_ALIGN_DELAY: float = 1.5
@@ -19,6 +18,7 @@ var yaw: float = 0.0
 var pitch: float = -0.22
 var distance: float = 4.2
 var auto_align: bool = true
+var pivot_height: float = 1.5
 var spring: SpringArm3D
 var camera: Camera3D
 var _idle_t: float = 0.0
@@ -61,7 +61,7 @@ func _process(delta: float) -> void:
 	pitch = clampf(pitch - d.y * SENSITIVITY, PITCH_MIN, PITCH_MAX)
 	distance = clampf(distance + GameInput.consume_zoom(), DIST_MIN, DIST_MAX)
 	if target != null:
-		var goal: Vector3 = target.global_position + Vector3(0.0, PIVOT_HEIGHT, 0.0)
+		var goal: Vector3 = target.global_position + Vector3(0.0, pivot_height, 0.0)
 		var p: Vector3 = global_position
 		var kxz: float = 1.0 - exp(-14.0 * delta)
 		var ky: float = 1.0 - exp(-7.0 * delta)

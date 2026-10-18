@@ -23,6 +23,7 @@ var state: String = "idle"
 var hspeed: float = 0.0
 var invulnerable: bool = false
 var debug_anim: String = ""             # outil de capture uniquement
+var blob: MeshInstance3D
 
 var _coyote: float = 0.0
 var _dodge_t: float = 0.0
@@ -52,6 +53,58 @@ func _ready() -> void:
 	var sword: Node3D = Sword.new()
 	sword.name = "EpeeEclair"
 	rig.call("equip_weapon", sword)
+	_set_layer(rig, 2)
+	_build_blob_shadow()
+
+
+## Couche de rendu 2 = personnages (éclairés par leur propre lumière, voir world.gd).
+func _set_layer(node: Node, layer_bit: int) -> void:
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers = layer_bit
+	for ch in node.get_children():
+		_set_layer(ch, layer_bit)
+
+
+## Ombre douce sous les pieds (tous niveaux de qualité, très peu coûteuse).
+func _build_blob_shadow() -> void:
+	var grad: Gradient = Gradient.new()
+	grad.set_color(0, Color(0.0, 0.0, 0.0, 0.55))
+	grad.set_color(1, Color(0.0, 0.0, 0.0, 0.0))
+	var tex: GradientTexture2D = GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 64
+	tex.height = 64
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_texture = tex
+	var plane: PlaneMesh = PlaneMesh.new()
+	plane.size = Vector2(1.2, 1.2)
+	blob = MeshInstance3D.new()
+	blob.name = "OmbreDouce"
+	blob.mesh = plane
+	blob.material_override = mat
+	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	blob.top_level = true
+	add_child(blob)
+
+
+func _update_blob() -> void:
+	var from: Vector3 = global_position + Vector3(0.0, 0.5, 0.0)
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + Vector3(0.0, -30.0, 0.0), 1)
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		blob.visible = false
+		return
+	blob.visible = true
+	var hp: Vector3 = hit["position"]
+	var h: float = global_position.y - hp.y
+	var k: float = clampf(1.0 - h / 6.0, 0.2, 1.0)
+	blob.global_position = hp + Vector3(0.0, 0.03, 0.0)
+	blob.scale = Vector3(k, 1.0, k)
 
 
 func _physics_process(delta: float) -> void:
@@ -113,6 +166,7 @@ func _physics_process(delta: float) -> void:
 			_coyote = 0.0
 
 	move_and_slide()
+	_update_blob()
 
 	hspeed = Vector2(velocity.x, velocity.z).length()
 	var air: bool = not is_on_floor()
