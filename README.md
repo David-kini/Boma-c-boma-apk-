@@ -1,32 +1,23 @@
-# Duel Éclair (projet Godot 4)
+# Duel Éclair — Rise of Legend (Phase 2 : monde 3D)
 
-Un héros (ton visage) contre 4 vagues de monstres : blobs, crânes rapides, puis un ogre.
-Jeu 2D en paysage, commandes tactiles, rendu GL Compatibility (léger, pour Tecno Pop 7).
+Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 
-## Ouvrir le projet
-1. Installe **Godot 4.3 ou plus récent** (version standard, pas .NET) : https://godotengine.org/download
-2. Lance Godot, clique **Importer**, choisis le fichier `project.godot` de ce dossier.
-3. Appuie sur **F5** pour jouer sur PC.
+## Ouvrir / tester
+1. Godot 4.3 ou plus → Importer → `project.godot` → F5.
+2. Clavier : ZQSD/WASD bouger, Maj courir, Espace sauter, C esquiver, flèches ou clic droit : caméra, F1 : qualité.
+3. Tactile : joystick à gauche, glisser à droite = caméra, boutons SAUT / ESQ. / Q (qualité).
 
-Clavier : flèches ou ZQSD (WASD) pour bouger, Espace saut, J poing, K pied, L garde.
-La souris simule le toucher : clique sur les boutons à l'écran.
+## APK
+Le workflow `.github/workflows/android.yml` exporte un APK debug (arm64) à chaque push sur `main`
+(onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
-## Combos
-- **Pied x4** enchaîne : coup de pied, coup haut, balayage bas, finisher qui projette.
-- Chaque coup doit toucher pour continuer l'enchaînement.
-- **Garde** bloque presque tout (dégâts réduits) si tu fais face à l'attaquant.
+## Contenu Phase 2
+Monde 3D ≈ 1414 m × 1414 m en tuiles avec LOD, zones, arène, ruines, rochers, volcan, montagnes de bordure ;
+personnage 3D à squelette (visage photo sur tête ellipsoïde), marche/course/saut/esquive/récupération de chute ;
+caméra 3e personne (SpringArm3D) ; HUD tactile ; 3 niveaux de qualité.
 
-## Changer le visage ou le décor
-- **Visage** : remplace `face.png` (image carrée, visage centré, fond transparent ou rond).
-- **Décor** : ajoute une photo `arena.jpg` (ou `arena.png`) à la racine du projet. Elle remplace le décor dessiné. Format paysage 16:9, sol visible en bas.
-
-## Exporter en APK (à faire sur ton PC)
-1. Installe **JDK 17** et le **SDK Android** (Android Studio ou outils en ligne de commande).
-2. Godot : **Éditeur > Paramètres de l'éditeur > Export > Android** : indique le chemin du SDK, du JDK et crée un keystore de debug.
-3. **Projet > Installer le modèle d'exportation** (Export templates), puis **Projet > Exporter > Ajouter... > Android**.
-4. Coche **Export With Debug**, clique **Exporter le projet** : tu obtiens un `.apk` à copier sur le téléphone.
-
-## Limites actuelles
-- Pas de son (à ajouter ensuite).
-- Le visage est une image plate collée sur un corps dessiné.
-- Non testé sur Godot ici : si Godot affiche une erreur au lancement, copie le message et envoie-le-moi.
+## Provisoire / non testé
+Code écrit sans pouvoir l'exécuter dans Godot : seule la syntaxe (gdparse) et les chemins ont été vérifiés.
+Corps en formes simples, esquive = pose accroupie (pas de roulade), perfs sur Tecno Pop 7 non mesurées.
+Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
+`legacy_2d/` = ancien prototype 2D (exclu de l'export).
