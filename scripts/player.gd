@@ -10,6 +10,7 @@ signal energy_changed(energy: float, max_energy: float)
 signal combo_changed(count: int)
 signal level_changed(level: int, xp: int, need: int)
 signal announce(text: String)
+signal inventory_changed(gold: int, potions: int)
 
 const PlayerRig = preload("res://scripts/player_rig.gd")
 const Sword = preload("res://scripts/sword.gd")
@@ -96,6 +97,11 @@ var is_divine: bool = false
 var divine_left: float = 0.0
 var aura: Node3D
 var _autosave: float = 30.0
+# --- inventaire et personnalisation
+const POTION_HEAL: float = 50.0
+var gold: int = 0
+var potions: int = 1
+var coat_name: String = "Noir"
 
 
 func _ready() -> void:
@@ -113,8 +119,9 @@ func _ready() -> void:
 	add_child(cs)
 	rig = PlayerRig.new()
 	rig.name = "Rig"
-	add_child(rig)
 	_load_progress()
+	rig.call("set_coat_color", coat_name)
+	add_child(rig)
 	_equip_weapon(weapon_index, false)
 	wings = Wings.new()
 	wings.name = "Ailes"
@@ -540,6 +547,10 @@ func _update_powers(delta: float) -> void:
 	if GameInput.weapon_buffer > 0.0:
 		GameInput.weapon_buffer = 0.0
 		cycle_weapon()
+	# potion de soin (bouton SOIN / touche H)
+	if GameInput.heal_buffer > 0.0:
+		GameInput.heal_buffer = 0.0
+		use_potion()
 
 
 func _start_fly() -> void:
@@ -679,7 +690,8 @@ func add_xp(amount: int) -> void:
 
 
 func save_progress() -> void:
-	SaveGame.save({"level": level, "xp": xp, "weapon": weapon_index, "wings": wings_variant})
+	SaveGame.save({"level": level, "xp": xp, "weapon": weapon_index, "wings": wings_variant,
+		"gold": gold, "potions": potions, "coat": coat_name})
 
 
 func _load_progress() -> void:
@@ -688,7 +700,48 @@ func _load_progress() -> void:
 	xp = int(d.get("xp", 0))
 	weapon_index = int(d.get("weapon", 0))
 	wings_variant = String(d.get("wings", "ange"))
+	gold = int(d.get("gold", 0))
+	potions = int(d.get("potions", 1))
+	coat_name = String(d.get("coat", "Noir"))
 	max_hp = 120.0 + 10.0 * float(level - 1)
 	hp = max_hp
 	if int(Weapons.get_def(weapon_index)["level"]) > level:
 		weapon_index = 0
+
+
+# ================================================================ inventaire
+
+func add_item(kind: String, amount: int) -> void:
+	if kind == "potion":
+		potions += amount
+		announce.emit("+%d potion de soin" % amount)
+	else:
+		gold += amount
+		announce.emit("+%d or" % amount)
+	Sfx.play("levelup", 1.6)
+	inventory_changed.emit(gold, potions)
+
+
+func use_potion() -> void:
+	if is_dead:
+		return
+	if potions <= 0:
+		announce.emit("Aucune potion")
+		return
+	if hp >= max_hp:
+		announce.emit("PV déjà au maximum")
+		return
+	potions -= 1
+	hp = minf(hp + POTION_HEAL, max_hp)
+	hp_changed.emit(hp, max_hp)
+	inventory_changed.emit(gold, potions)
+	CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.0, 0.0), Color(0.3, 1.0, 0.4), 1.2)
+	CombatFx.number(get_parent(), global_position + Vector3(0.0, 2.0, 0.0), int(POTION_HEAL), Color(0.3, 1.0, 0.4))
+	save_progress()
+
+
+func set_coat(name: String) -> void:
+	coat_name = name
+	rig.call("set_coat_color", name)
+	_set_layer(rig, 2)
+	save_progress()

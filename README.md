@@ -11,6 +11,18 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Ennemis, boss, inventaire (v0.9)
+- 7 types d'ennemis : squelette, guerrier, voleur, mage (zones des monstres et ruines),
+  **Barbare** (lent, très résistant, hache à deux mains — zone volcanique),
+  **Assassin** (très rapide, deux dagues — forêt), **Sorcier** (boules de feu à distance — zone rocheuse).
+  Modèles CC0 KayKit Adventurers, accessoires triés, teinte ennemie.
+- **Boss : le Roi Squelette** (repaire, nord-ouest) : 1200 PV, couronne d'or, barre de vie en haut de l'écran.
+  Phase 2 (< 60 %) : invoque des serviteurs, plus rapide. Phase 3 (< 30 %) : furie. Dès la phase 2,
+  onde de choc annoncée par un cercle rouge au sol (s'éloigner !). 600 XP, réapparaît après 2 min.
+- Butin : pièces d'or et potions (30 %, 3 pour le boss), attirés vers le joueur.
+  Potion = +50 PV : touche **H** ou bouton **SOIN**. Or et potions sauvegardés.
+- Écran titre (JOUER), couleur du manteau dans le menu (Noir, Bordeaux, Bleu nuit, Blanc), sauvegardée.
+
 ## Pouvoirs, armes, progression (v0.8, phases 4-5)
 - 5e coup du combo : frappe montante + éclair tout autour (32 dégâts).
 - Vol magique de 10 s (VOL / F) : SAUT = monter, ESQ. = descendre ; recharge 5 s ; 4 ailes (ange, démon, éclair, or) animées.

@@ -29,6 +29,7 @@ func _buttons() -> Dictionary:
 		"fly": [Vector2(s.x - 245.0, s.y - 205.0), 40.0, "VOL"],
 		"divine": [Vector2(s.x - 400.0, s.y - 72.0), 40.0, "DIVIN"],
 		"weapon": [Vector2(s.x - 58.0, 125.0), 30.0, "ARME"],
+		"heal": [Vector2(s.x - 58.0, 195.0), 30.0, "SOIN"],
 		"menu": [Vector2(s.x - 58.0, 50.0), 34.0, "MENU"],
 	}
 
@@ -93,6 +94,8 @@ func _press(bname: String) -> void:
 		GameInput.divine_buffer = GameInput.BUFFER_TIME
 	elif bname == "weapon":
 		GameInput.weapon_buffer = GameInput.BUFFER_TIME
+	elif bname == "heal":
+		GameInput.heal_buffer = GameInput.BUFFER_TIME
 	elif bname == "menu":
 		_reset()
 		get_parent().call("open_settings")

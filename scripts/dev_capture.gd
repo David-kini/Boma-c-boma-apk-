@@ -104,6 +104,8 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		player.set("level", int(args["level"]))
 	if args.has("weapon"):
 		player.call("_equip_weapon", int(args["weapon"]), false)
+	if args.has("coat"):
+		player.call("set_coat", String(args["coat"]))
 	if args.has("wings"):
 		player.call("set_wings", String(args["wings"]))
 	if args.has("fly"):

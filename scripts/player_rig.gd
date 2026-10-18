@@ -14,6 +14,12 @@ const SKIN: Color = Color(0.90, 0.68, 0.60)   # teint albinos (identique à hero
 const SHIRT: Color = Color(0.95, 0.95, 0.96)
 const VEST: Color = Color(0.13, 0.11, 0.10)
 const COAT: Color = Color(0.07, 0.065, 0.075)
+## Couleurs de manteau disponibles (menu de personnalisation).
+const COAT_COLORS: Dictionary = {
+	"Noir": Color(0.07, 0.065, 0.075), "Bordeaux": Color(0.30, 0.04, 0.07),
+	"Bleu nuit": Color(0.05, 0.08, 0.22), "Blanc": Color(0.85, 0.84, 0.82),
+}
+var coat_color: Color = COAT
 const PANTS: Color = Color(0.14, 0.14, 0.16)
 const BOOT: Color = Color(0.05, 0.045, 0.05)
 const BELT: Color = Color(0.36, 0.22, 0.12)
@@ -375,23 +381,7 @@ func _build_skinned_body() -> void:
 		R(1.035, 0.168, 0.111, "hips", "spine", 0.6, VEST, {"open": 0.30}),
 	]
 	_skinned(_loft(vest, 26, false, false, 0.025), "coat", "Gilet")
-	# ---- long manteau ouvert, bordures et ourlet dorés, pans qui suivent les jambes
-	var coat: Array = [
-		R(1.545, 0.100, 0.092, "chest", "neck", 0.3, COAT, {"open": 1.25}),
-		R(1.495, 0.192, 0.118, "chest", "", 0.0, COAT, {"open": 0.88}),
-		R(1.445, 0.228, 0.132, "chest", "", 0.0, COAT, {"open": 0.82}),
-		R(1.32, 0.212, 0.132, "chest", "", 0.0, COAT, {"open": 0.80}),
-		R(1.20, 0.192, 0.126, "spine", "chest", 0.5, COAT, {"open": 0.72}),
-		R(1.08, 0.178, 0.118, "spine", "", 0.0, COAT, {"open": 0.66}),
-		R(0.98, 0.186, 0.122, "hips", "spine", 0.2, COAT, {"open": 0.60}),
-		R(0.85, 0.212, 0.150, "hips", "", 0.0, COAT, {"open": 0.55, "leg": 0.15, "coat": 0.10}),
-		R(0.70, 0.245, 0.180, "hips", "", 0.0, COAT, {"open": 0.50, "leg": 0.30, "coat": 0.35}),
-		R(0.55, 0.278, 0.210, "hips", "", 0.0, COAT, {"open": 0.46, "leg": 0.40, "coat": 0.60}),
-		R(0.43, 0.298, 0.228, "hips", "", 0.0, COAT, {"open": 0.43, "leg": 0.45, "coat": 0.75}),
-		R(0.43, 0.299, 0.229, "hips", "", 0.0, GOLD, {"open": 0.43, "leg": 0.45, "coat": 0.75}),
-		R(0.37, 0.306, 0.234, "hips", "", 0.0, GOLD, {"open": 0.42, "leg": 0.47, "coat": 0.80}),
-	]
-	_skinned(_loft(coat, 30, false, false, 0.022), "coat", "Manteau")
+	_build_coat()
 	# ---- bras (chemise blanche)
 	for side in [-1.0, 1.0]:
 		var s: String = "l" if side < 0.0 else "r"
@@ -743,3 +733,36 @@ func animate(delta: float, state: String, speed: float) -> void:
 		skeleton.set_bone_pose_rotation(int(bone_idx[b]), Quaternion.from_euler(cur))
 	hips_y = lerpf(hips_y, hy, k)
 	skeleton.set_bone_pose_position(int(bone_idx["hips"]), HIPS_REST + Vector3(0.0, hips_y, 0.0))
+
+
+## Long manteau ouvert, bordures et ourlet dorés, pans qui suivent les jambes.
+## Reconstruit quand le joueur change la couleur (personnalisation).
+func _build_coat() -> void:
+	var C: Color = coat_color
+	var old: Node = skeleton.get_node_or_null("Manteau")
+	if old != null:
+		skeleton.remove_child(old)
+		old.queue_free()
+	# ---- long manteau ouvert, bordures et ourlet dorés, pans qui suivent les jambes
+	var coat: Array = [
+		R(1.545, 0.100, 0.092, "chest", "neck", 0.3, C, {"open": 1.25}),
+		R(1.495, 0.192, 0.118, "chest", "", 0.0, C, {"open": 0.88}),
+		R(1.445, 0.228, 0.132, "chest", "", 0.0, C, {"open": 0.82}),
+		R(1.32, 0.212, 0.132, "chest", "", 0.0, C, {"open": 0.80}),
+		R(1.20, 0.192, 0.126, "spine", "chest", 0.5, C, {"open": 0.72}),
+		R(1.08, 0.178, 0.118, "spine", "", 0.0, C, {"open": 0.66}),
+		R(0.98, 0.186, 0.122, "hips", "spine", 0.2, C, {"open": 0.60}),
+		R(0.85, 0.212, 0.150, "hips", "", 0.0, C, {"open": 0.55, "leg": 0.15, "coat": 0.10}),
+		R(0.70, 0.245, 0.180, "hips", "", 0.0, C, {"open": 0.50, "leg": 0.30, "coat": 0.35}),
+		R(0.55, 0.278, 0.210, "hips", "", 0.0, C, {"open": 0.46, "leg": 0.40, "coat": 0.60}),
+		R(0.43, 0.298, 0.228, "hips", "", 0.0, C, {"open": 0.43, "leg": 0.45, "coat": 0.75}),
+		R(0.43, 0.299, 0.229, "hips", "", 0.0, GOLD, {"open": 0.43, "leg": 0.45, "coat": 0.75}),
+		R(0.37, 0.306, 0.234, "hips", "", 0.0, GOLD, {"open": 0.42, "leg": 0.47, "coat": 0.80}),
+	]
+	_skinned(_loft(coat, 30, false, false, 0.022), "coat", "Manteau")
+
+
+func set_coat_color(name: String) -> void:
+	coat_color = COAT_COLORS.get(name, COAT)
+	if skeleton != null and skeleton.get_node_or_null("Manteau") != null:
+		_build_coat()

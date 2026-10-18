@@ -41,6 +41,8 @@ func _dev_capture() -> void:
 		var s: String = a.trim_prefix("--")
 		var kv: PackedStringArray = s.split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else ""
+	if not args.has("capture") or args.has("title"):
+		hud.call("show_title")      # écran titre (le jeu attend « JOUER »)
 	if not args.has("capture"):
 		return
 	var cap: Node = load("res://scripts/dev_capture.gd").new()

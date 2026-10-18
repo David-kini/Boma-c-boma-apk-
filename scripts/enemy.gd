@@ -1,5 +1,7 @@
 extends CharacterBody3D
-## Ennemi squelette (modèle CC0 KayKit, riggé, animations incluses).
+## Ennemi (modèles CC0 KayKit riggés : squelettes, barbare, assassin, sorcier, boss).
+## Corps à corps ou à distance (boules de feu). Le boss a 3 phases : invocations puis
+## onde de choc annoncée par un cercle rouge au sol. Lâche de l'or et des potions.
 ## États : repos -> poursuite -> attaque (préparation visible, coup, récupération)
 ##         touché (étourdi) -> mort. Barre de vie au-dessus de la tête.
 ## Il "dort" (aucun calcul) quand le joueur est à plus de 60 m.
@@ -7,6 +9,8 @@ extends CharacterBody3D
 signal died(enemy: Node)
 
 const CombatFx = preload("res://scripts/combat_fx.gd")
+const Projectile = preload("res://scripts/projectile.gd")
+const Loot = preload("res://scripts/loot.gd")
 const BLADE: String = "res://Assets/Characters/Skeletons/Weapons/Skeleton_Blade.gltf"
 const GRAVITY: float = 22.0
 const SLEEP_DIST: float = 60.0
@@ -20,6 +24,16 @@ const SLEEP_DIST: float = 60.0
 @export var model_scale: float = 1.3
 @export var display_name: String = "Squelette"
 @export var xp_value: int = 10
+@export var weapon_path: String = BLADE
+@export var attack_anim: String = "1H_Melee_Attack_Chop"
+@export var hit_time: float = 0.55          # instant du coup dans l'animation (s)
+@export var attack_time: float = 1.05       # durée totale de l'attaque (s)
+@export var ranged: bool = false            # sorcier : boules de feu à distance
+@export var is_boss: bool = false
+@export var fire_color: Color = Color(1.0, 0.45, 0.1)
+## Modèles aventuriers : ils portent tous leurs accessoires ; on ne garde que ceux-ci.
+@export var keep_props: PackedStringArray = PackedStringArray()
+@export var tint: Color = Color(1, 1, 1)   # teinte "ennemie" (assombrit le modèle)
 
 var hp: float = 60.0
 var state: String = "idle"
@@ -33,10 +47,15 @@ var _model: Node3D = null
 var _bar_fg: MeshInstance3D = null
 var _bar_root: Node3D = null
 var _cur_anim: String = ""
+var phase: int = 1
+var _special_cd: float = 4.0
+var _ring: MeshInstance3D = null
 
 
 func _ready() -> void:
 	add_to_group("enemies")
+	if is_boss:
+		add_to_group("boss")
 	hp = max_hp
 	collision_layer = 4
 	collision_mask = 1 | 2 | 4
@@ -52,7 +71,7 @@ func _ready() -> void:
 	_model.scale = Vector3.ONE * model_scale
 	add_child(_model)
 	_ap = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	for a in ["Idle", "Idle_Combat", "Running_A", "Walking_D_Skeletons"]:
+	for a in ["Idle", "Idle_Combat", "Running_A", "Running_B", "Walking_D_Skeletons", "2H_Melee_Idle"]:
 		if _ap != null and _ap.has_animation(a):
 			_ap.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	_attach_weapon()
@@ -65,12 +84,63 @@ func _attach_weapon() -> void:
 	for n in _model.find_children("*", "Skeleton3D", true, false):
 		sk = n as Skeleton3D
 		break
-	if sk == null or sk.find_bone("handslot.r") < 0 or not ResourceLoader.exists(BLADE):
+	if sk == null or sk.find_bone("handslot.r") < 0:
 		return
-	var att: BoneAttachment3D = BoneAttachment3D.new()
-	sk.add_child(att)
-	att.bone_name = "handslot.r"
-	att.add_child((load(BLADE) as PackedScene).instantiate())
+	if not keep_props.is_empty():
+		for mi in _model.find_children("*", "MeshInstance3D", true, false):
+			var m3: MeshInstance3D = mi as MeshInstance3D
+			if m3.get_parent() is Skeleton3D:
+				continue          # corps
+			if not keep_props.has(String(m3.name)):
+				m3.visible = false
+	if tint != Color(1, 1, 1):
+		for mi2 in _model.find_children("*", "MeshInstance3D", true, false):
+			var g: MeshInstance3D = mi2 as MeshInstance3D
+			if g.mesh == null:
+				continue
+			for si in range(g.mesh.get_surface_count()):
+				var base: Material = g.mesh.surface_get_material(si)
+				if base is StandardMaterial3D:
+					var dm: StandardMaterial3D = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
+					dm.albedo_color = dm.albedo_color * tint
+					g.set_surface_override_material(si, dm)
+	if weapon_path != "" and ResourceLoader.exists(weapon_path):
+		var att: BoneAttachment3D = BoneAttachment3D.new()
+		sk.add_child(att)
+		att.bone_name = "handslot.r"
+		att.add_child((load(weapon_path) as PackedScene).instantiate())
+	if is_boss and sk.find_bone("head") >= 0:
+		# couronne dorée du Roi Squelette
+		var ha: BoneAttachment3D = BoneAttachment3D.new()
+		sk.add_child(ha)
+		ha.bone_name = "head"
+		var gold: StandardMaterial3D = StandardMaterial3D.new()
+		gold.albedo_color = Color(1.0, 0.78, 0.2)
+		gold.metallic = 0.7
+		gold.roughness = 0.3
+		gold.emission_enabled = true
+		gold.emission = Color(0.6, 0.4, 0.05)
+		var band: MeshInstance3D = MeshInstance3D.new()
+		var cm: CylinderMesh = CylinderMesh.new()
+		cm.top_radius = 0.42
+		cm.bottom_radius = 0.38
+		cm.height = 0.18
+		band.mesh = cm
+		band.material_override = gold
+		band.position = Vector3(0.0, 0.85, 0.0)
+		ha.add_child(band)
+		for k in range(6):
+			var a: float = float(k) / 6.0 * TAU
+			var spike: MeshInstance3D = MeshInstance3D.new()
+			var sp: CylinderMesh = CylinderMesh.new()
+			sp.top_radius = 0.0
+			sp.bottom_radius = 0.09
+			sp.height = 0.28
+			sp.radial_segments = 4
+			spike.mesh = sp
+			spike.material_override = gold
+			spike.position = Vector3(cos(a) * 0.38, 1.05, sin(a) * 0.38)
+			ha.add_child(spike)
 
 
 func _bar_mat(c: Color) -> StandardMaterial3D:
@@ -109,7 +179,7 @@ func _update_bar() -> void:
 	# la barre rétrécit depuis la droite (décalage en espace caméra via le billboard)
 	(_bar_fg.mesh as QuadMesh).size = Vector2(0.86 * maxf(r, 0.001), 0.075)
 	(_bar_fg.mesh as QuadMesh).center_offset = Vector3(-0.43 * (1.0 - r), 0.0, 0.0)
-	_bar_root.visible = state != "dead" and r < 0.999
+	_bar_root.visible = state != "dead" and r < 0.999 and not is_boss
 
 
 func _play(anim: String, blend: float = 0.15) -> void:
@@ -155,28 +225,47 @@ func _physics_process(delta: float) -> void:
 		"chase":
 			if player_dead or dist > detect_radius * 1.8:
 				state = "idle"
+			elif is_boss and phase >= 2 and _special_cd <= 0.0 and dist < 9.0:
+				_start_slam()
+			elif ranged and dist <= 13.0 and dist > attack_range and _cooldown <= 0.0:
+				state = "cast"
+				_t = 0.0
+				_hit_done = false
+				_cur_anim = ""
+				_play("Spellcast_Shoot", 0.1)
 			elif dist <= attack_range and _cooldown <= 0.0:
 				state = "attack"
 				_t = 0.0
 				_hit_done = false
 				_cur_anim = ""
-				_play("1H_Melee_Attack_Chop", 0.1)
+				_play(attack_anim, 0.1)
 			else:
 				_face(player.global_position, delta)
 				var dir: Vector3 = Vector3(to_p.x, 0.0, to_p.z).normalized()
-				hv = dir * speed if dist > attack_range * 0.8 else Vector3.ZERO
+				var keep: float = 9.0 if ranged else attack_range * 0.8
+				hv = dir * speed if dist > keep else Vector3.ZERO
 				_play("Running_A" if hv.length() > 0.1 else "Idle_Combat")
 		"attack":
 			if _t < 0.45:
 				_face(player.global_position, delta, 6.0)
-			if not _hit_done and _t >= 0.55:
+			if not _hit_done and _t >= hit_time:
 				_hit_done = true
 				var fwd: Vector3 = -global_transform.basis.z
 				if dist <= attack_range + 0.6 and fwd.dot(Vector3(to_p.x, 0.0, to_p.z).normalized()) > 0.3:
 					player.call("take_damage", damage, global_position)
-			if _t >= 1.05:
+			if _t >= attack_time:
 				state = "chase"
-				_cooldown = 1.1
+				_cooldown = 1.1 if not is_boss else 0.6
+		"cast":
+			_face(player.global_position, delta, 8.0)
+			if not _hit_done and _t >= 0.6:
+				_hit_done = true
+				_shoot()
+			if _t >= 1.2:
+				state = "chase"
+				_cooldown = 2.2
+		"slam":
+			_update_slam(delta)
 		"hit":
 			velocity.x = move_toward(velocity.x, 0.0, 20.0 * delta)
 			velocity.z = move_toward(velocity.z, 0.0, 20.0 * delta)
@@ -187,6 +276,7 @@ func _physics_process(delta: float) -> void:
 			velocity.z = 0.0
 			if _t > 3.5:
 				queue_free()
+	_special_cd -= delta
 	if state != "hit":
 		velocity.x = hv.x
 		velocity.z = hv.z
@@ -217,10 +307,19 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 		collision_mask = 1
 		_bar_root.visible = false
 		Sfx.play("enemy_die")
+		_drop_loot()
+		if _ring != null:
+			_ring.queue_free()
+			_ring = null
 		if player != null and player.has_method("add_xp"):
 			player.call("add_xp", xp_value)
 			CombatFx.number(get_parent(), head + Vector3(0.0, 0.9, 0.0), xp_value, Color(0.5, 1.0, 0.6))
 		died.emit(self)
+		return
+	if is_boss:
+		_check_phase()
+		return
+	if state == "slam" or state == "cast":
 		return
 	state = "hit"
 	_t = 0.0
@@ -231,3 +330,117 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 	var knock: Vector3 = push.normalized() * 5.0
 	velocity.x = knock.x
 	velocity.z = knock.z
+
+
+# ================================================================ distance, boss, butin
+
+func _shoot() -> void:
+	if player == null:
+		return
+	var pr: Node3D = Projectile.new()
+	pr.set("damage", damage)
+	pr.set("color", fire_color)
+	pr.set("world", world)
+	var from: Vector3 = global_position + Vector3(0.0, 1.4 * model_scale / 1.3, 0.0)
+	var target: Vector3 = player.global_position + Vector3(0.0, 1.0, 0.0)
+	pr.set("dir", (target - from).normalized())
+	get_parent().add_child(pr)
+	pr.global_position = from
+
+
+func _check_phase() -> void:
+	var r: float = hp / max_hp
+	var new_phase: int = 3 if r < 0.3 else (2 if r < 0.6 else 1)
+	if new_phase > phase:
+		phase = new_phase
+		speed *= 1.2
+		_summon(2 if phase == 2 else 3)
+		_special_cd = 1.5
+		if player != null:
+			var hud_msg: String = "Le Roi Squelette appelle ses serviteurs !" if phase == 2 else "Le Roi Squelette entre en furie !"
+			player.emit_signal("announce", hud_msg)
+
+
+func _summon(n: int) -> void:
+	for k in range(n):
+		var e: CharacterBody3D = load("res://scripts/enemy.gd").new()
+		e.set("model_path", "res://Assets/Characters/Skeletons/Skeleton_Minion.glb")
+		e.set("max_hp", 35.0)
+		e.set("damage", 6.0)
+		e.set("speed", 3.8)
+		e.set("model_scale", 1.2)
+		e.set("display_name", "Serviteur")
+		e.set("xp_value", 8)
+		e.set("world", world)
+		var a: float = float(k) / float(n) * TAU
+		get_parent().add_child(e)
+		e.global_position = global_position + Vector3(cos(a) * 4.0, 0.5, sin(a) * 4.0)
+		CombatFx.spark(get_parent(), e.global_position + Vector3(0.0, 1.0, 0.0), Color(0.6, 0.2, 1.0), 1.4)
+
+
+## Onde de choc : un cercle rouge grandit 1,3 s au sol, puis frappe tout ce qui est dedans.
+func _start_slam() -> void:
+	state = "slam"
+	_t = 0.0
+	_hit_done = false
+	_cur_anim = ""
+	_play("2H_Melee_Attack_Spin" if _ap != null and _ap.has_animation("2H_Melee_Attack_Spin") else attack_anim, 0.1)
+	_ring = MeshInstance3D.new()
+	var tor: TorusMesh = TorusMesh.new()
+	tor.inner_radius = 0.9
+	tor.outer_radius = 1.0
+	tor.rings = 48
+	tor.ring_segments = 4
+	_ring.mesh = tor
+	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(1.0, 0.1, 0.1, 0.8)
+	_ring.material_override = m
+	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	get_parent().add_child(_ring)
+	_ring.global_position = global_position + Vector3(0.0, 0.15, 0.0)
+	_ring.scale = Vector3(0.5, 0.15, 0.5)
+
+
+func _update_slam(_delta: float) -> void:
+	const RADIUS: float = 7.0
+	if _ring != null:
+		var k: float = clampf(_t / 1.3, 0.0, 1.0)
+		_ring.scale = Vector3(RADIUS * k, 0.15, RADIUS * k)
+	if not _hit_done and _t >= 1.3:
+		_hit_done = true
+		if _ring != null:
+			_ring.queue_free()
+			_ring = null
+		for k in range(10):
+			var a: float = float(k) / 10.0 * TAU
+			CombatFx.spark(get_parent(), global_position + Vector3(cos(a) * RADIUS * 0.8, 0.4, sin(a) * RADIUS * 0.8), Color(1.0, 0.25, 0.15), 1.6)
+		Sfx.play("lightning", 0.6)
+		if player != null:
+			var d: float = Vector2(player.global_position.x - global_position.x, player.global_position.z - global_position.z).length()
+			var dy: float = player.global_position.y - global_position.y
+			if d < RADIUS and dy < 2.5:
+				player.call("take_damage", damage * 1.6, global_position)
+			var cam: Node = player.get("cam")
+			if cam != null:
+				cam.call("shake", 0.5)
+	if _t >= 1.9:
+		state = "chase"
+		_special_cd = 6.0 if phase == 2 else 4.0
+
+
+func _drop_loot() -> void:
+	var gold: int = randi_range(1, 4) * (20 if is_boss else 1)
+	_spawn_loot("or", gold, Vector3(0.4, 0.0, 0.0))
+	var potions: int = 3 if is_boss else (1 if randf() < 0.3 else 0)
+	for k in range(potions):
+		_spawn_loot("potion", 1, Vector3(-0.4, 0.0, 0.5 * float(k)))
+
+
+func _spawn_loot(kind: String, amount: int, off: Vector3) -> void:
+	var l: Node3D = Loot.new()
+	l.set("kind", kind)
+	l.set("amount", amount)
+	get_parent().add_child(l)
+	l.global_position = global_position + off
