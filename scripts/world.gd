@@ -8,6 +8,7 @@ const Terrain = preload("res://scripts/terrain.gd")
 var data: RefCounted
 var terrain: Node3D
 var sun: DirectionalLight3D
+var env: Environment
 var follow: Node3D = null
 
 
@@ -48,10 +49,20 @@ func _apply_quality(_level: int) -> void:
 	var dist: float = GameSettings.shadow_distance()
 	sun.shadow_enabled = dist > 0.0
 	sun.directional_shadow_max_distance = maxf(dist, 1.0)
+	env.fog_density = GameSettings.fog_density()
+	if GameSettings.use_sky():
+		env.background_mode = Environment.BG_SKY
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	else:
+		# ciel remplacé par une couleur unie : moins coûteux
+		env.background_mode = Environment.BG_COLOR
+		env.background_color = Color(0.66, 0.78, 0.92)
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.62, 0.68, 0.76)
 
 
 func _build_environment() -> void:
-	var env: Environment = Environment.new()
+	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky: Sky = Sky.new()
 	var psm: ProceduralSkyMaterial = ProceduralSkyMaterial.new()

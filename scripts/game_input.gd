@@ -1,7 +1,7 @@
 extends Node
 ## Entrées unifiées : clavier (PC) et commandes tactiles (HUD). Autoload : GameInput.
 ## Clavier : ZQSD/WASD bouger, Maj courir, Espace sauter, C esquiver,
-## flèches ou clic droit + souris pour la caméra, F1 pour la qualité.
+## flèches ou clic droit + souris pour la caméra, Échap ou F1 : paramètres (géré par le HUD).
 
 const BUFFER_TIME: float = 0.15
 
@@ -31,8 +31,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				jump_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_C:
 				dodge_buffer = BUFFER_TIME
-			elif ke.physical_keycode == KEY_F1:
-				GameSettings.cycle_quality()
 	elif event is InputEventMouseMotion:
 		var mm: InputEventMouseMotion = event as InputEventMouseMotion
 		if (mm.button_mask & MOUSE_BUTTON_MASK_RIGHT) != 0:

@@ -6,7 +6,6 @@ extends Node3D
 const WorldData = preload("res://scripts/world_data.gd")
 
 const CHUNK: float = 64.0
-const LOD_QUADS: Array = [24, 12, 6]      # pas de 2,7 m / 5,3 m / 10,7 m
 const SKIRT_DEPTH: float = 6.0            # jupe sous les bords : cache les fissures entre niveaux
 const BUILD_INTERVAL: float = 0.10        # une tuile construite toutes les 0,1 s au maximum
 
@@ -16,6 +15,7 @@ var chunks: Dictionary = {}               # Vector2i -> {node, lod}
 var view_chunks: int = 5
 var max_index: int = 12
 var _timer: float = 0.0
+var _gen: int = 0                         # incrémenté à chaque changement de qualité
 
 
 func setup(world_data: RefCounted) -> void:
@@ -31,6 +31,7 @@ func setup(world_data: RefCounted) -> void:
 
 func _on_quality_changed(_level: int) -> void:
 	view_chunks = GameSettings.view_chunks()
+	_gen += 1
 
 
 func _valid(k: Vector2i) -> bool:
@@ -85,10 +86,13 @@ func update(p: Vector3, delta: float) -> void:
 			if d > float(view_chunks):
 				continue
 			var cur: int = -1
+			var stale: bool = false
 			if chunks.has(k):
-				cur = int((chunks[k] as Dictionary)["lod"])
+				var entry: Dictionary = chunks[k]
+				cur = int(entry["lod"])
+				stale = int(entry["gen"]) != _gen
 			var lod: int = _lod_for(d, cur)
-			if cur == lod:
+			if cur == lod and not stale:
 				continue
 			if d < best_d:
 				best_d = d
@@ -109,7 +113,7 @@ func _remove(k: Vector2i) -> void:
 
 func _build(k: Vector2i, lod: int) -> void:
 	_remove(k)
-	var mesh: ArrayMesh = _make_mesh(k, int(LOD_QUADS[lod]))
+	var mesh: ArrayMesh = _make_mesh(k, GameSettings.lod_quads(lod))
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.material_override = material
@@ -122,7 +126,7 @@ func _build(k: Vector2i, lod: int) -> void:
 		cs.shape = mesh.create_trimesh_shape()
 		body.add_child(cs)
 		mi.add_child(body)
-	chunks[k] = {"node": mi, "lod": lod}
+	chunks[k] = {"node": mi, "lod": lod, "gen": _gen}
 
 
 func _make_mesh(k: Vector2i, quads: int) -> ArrayMesh:
