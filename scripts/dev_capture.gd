@@ -99,9 +99,36 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		(cam.get("camera") as Camera3D).fov = float(args["fov"])
 	if anim != "":
 		player.set("debug_anim", anim)
+	autoattack = args.has("autoattack")
+	report = args.has("report")
 
 
-func _process(_delta: float) -> void:
+var autoattack: bool = false
+var report: bool = false
+var _log_t: float = 0.0
+
+
+func _report() -> void:
+	var txt: String = "BILAN pos=%s joueur pv=%d etat=%s combo=%d energie=%d | ennemis:" % [
+		str(player.global_position.snapped(Vector3(0.1, 0.1, 0.1))), int(player.get("hp")), String(player.get("state")), int(player.get("combo_count")), int(player.get("energy"))]
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en.global_position.distance_to(player.global_position) < 25.0:
+			var mdl: Node3D = en.get("_model") as Node3D
+			txt += " [%s pv=%d %s d=%.1f pos=%s vis=%s]" % [String(en.get("display_name")), int(en.get("hp")), String(en.get("state")),
+				en.global_position.distance_to(player.global_position), str(en.global_position.snapped(Vector3(0.1, 0.1, 0.1))),
+				str(mdl.is_visible_in_tree()) if mdl != null else "?"]
+	print(txt)
+
+
+func _process(delta: float) -> void:
+	if autoattack or report:
+		if autoattack:
+			GameInput.attack_buffer = GameInput.ATTACK_BUFFER
+		_log_t -= delta
+		if _log_t <= 0.0:
+			_log_t = 1.0
+			_report()
 	_n += 1
 	if _n == frames:
 		var img: Image = get_viewport().get_texture().get_image()

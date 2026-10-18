@@ -1,14 +1,16 @@
 extends Node
 ## Entrées unifiées : clavier (PC) et commandes tactiles (HUD). Autoload : GameInput.
-## Clavier : ZQSD/WASD bouger, Maj courir, Espace sauter, C esquiver,
+## Clavier : ZQSD/WASD bouger, Maj courir, Espace sauter, C esquiver, J/Entrée/clic gauche attaquer,
 ## flèches ou clic droit + souris pour la caméra, Échap ou F1 : paramètres (géré par le HUD).
 
 const BUFFER_TIME: float = 0.15
+const ATTACK_BUFFER: float = 0.35
 
 var touch_move: Vector2 = Vector2.ZERO   # joystick virtuel (x droite, y bas)
 var cam_delta: Vector2 = Vector2.ZERO    # glissement accumulé pour la caméra
 var jump_buffer: float = 0.0
 var dodge_buffer: float = 0.0
+var attack_buffer: float = 0.0
 var zoom_delta: float = 0.0              # >0 = éloigner la caméra
 
 
@@ -17,6 +19,8 @@ func _process(delta: float) -> void:
 		jump_buffer -= delta
 	if dodge_buffer > 0.0:
 		dodge_buffer -= delta
+	if attack_buffer > 0.0:
+		attack_buffer -= delta
 	var k: Vector2 = Vector2(
 		float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
 		float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
@@ -32,9 +36,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				jump_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_C:
 				dodge_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_J or ke.physical_keycode == KEY_ENTER:
+				attack_buffer = ATTACK_BUFFER
 	elif event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and not DisplayServer.is_touchscreen_available():
+			attack_buffer = ATTACK_BUFFER
+		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_delta -= 0.4
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_delta += 0.4
@@ -84,3 +92,10 @@ func consume_zoom() -> float:
 	var z: float = zoom_delta
 	zoom_delta = 0.0
 	return z
+
+
+func consume_attack() -> bool:
+	if attack_buffer > 0.0:
+		attack_buffer = 0.0
+		return true
+	return false

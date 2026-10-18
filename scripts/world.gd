@@ -5,6 +5,7 @@ extends Node3D
 const WorldData = preload("res://scripts/world_data.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const Landmarks = preload("res://scripts/landmarks.gd")
+const EnemySpawner = preload("res://scripts/enemy_spawner.gd")
 
 var data: RefCounted
 var terrain: Node3D
@@ -23,6 +24,10 @@ func _ready() -> void:
 	_build_boundary_walls()
 	var lm: RefCounted = Landmarks.new()
 	lm.call("build", self, data)
+	var spawner: Node3D = EnemySpawner.new()
+	spawner.name = "Ennemis"
+	add_child(spawner)
+	spawner.call("setup", self)
 	terrain.call("build_around_now", spawn_point(), 1)
 	GameSettings.quality_changed.connect(_apply_quality)
 	_apply_quality(GameSettings.quality)

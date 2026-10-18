@@ -61,6 +61,20 @@ var hips_y: float = 0.0
 var phase: float = 0.0
 var t: float = 0.0
 var weapon: Node3D = null
+var attack_kind: int = 0          # coup du combo en cours (0..3), réglé par player.gd
+var attack_t: float = 0.0         # avancement du coup (0..1)
+
+## Poses de départ et de fin de chaque coup (le geste passe de l'une à l'autre).
+const ATTACK_POSES: Array = [
+	[{"arm_r": Vector3(0.4, 0.0, 1.5), "fore_r": Vector3(0.5, 0.0, 0.0), "hand_r": Vector3(-0.6, 0.0, 0.0), "chest": Vector3(0.0, 0.55, 0.0), "spine": Vector3(-0.1, 0.0, 0.0)},
+	 {"arm_r": Vector3(1.3, 0.0, -0.4), "fore_r": Vector3(0.1, 0.0, 0.0), "hand_r": Vector3(-1.0, 0.0, 0.0), "chest": Vector3(0.0, -0.6, 0.0), "spine": Vector3(-0.2, 0.0, 0.0)}],
+	[{"arm_r": Vector3(1.2, 0.0, -0.6), "fore_r": Vector3(0.3, 0.0, 0.0), "hand_r": Vector3(-1.0, 0.0, 0.0), "chest": Vector3(0.0, -0.6, 0.0), "spine": Vector3(-0.15, 0.0, 0.0)},
+	 {"arm_r": Vector3(0.5, 0.0, 1.5), "fore_r": Vector3(0.2, 0.0, 0.0), "hand_r": Vector3(-0.5, 0.0, 0.0), "chest": Vector3(0.0, 0.6, 0.0), "spine": Vector3(-0.2, 0.0, 0.0)}],
+	[{"arm_r": Vector3(2.9, 0.0, 0.15), "fore_r": Vector3(0.4, 0.0, 0.0), "hand_r": Vector3(0.3, 0.0, 0.0), "chest": Vector3(0.1, 0.0, 0.0), "spine": Vector3(0.15, 0.0, 0.0)},
+	 {"arm_r": Vector3(0.7, 0.0, 0.15), "fore_r": Vector3(0.1, 0.0, 0.0), "hand_r": Vector3(-1.2, 0.0, 0.0), "chest": Vector3(-0.15, 0.0, 0.0), "spine": Vector3(-0.35, 0.0, 0.0)}],
+	[{"arm_r": Vector3(1.55, 0.0, 1.3), "fore_r": Vector3(0.05, 0.0, 0.0), "hand_r": Vector3(-1.3, 0.0, 0.0), "arm_l": Vector3(0.3, 0.0, -1.0), "spine": Vector3(-0.15, 0.0, 0.0)},
+	 {"arm_r": Vector3(1.55, 0.0, 1.3), "fore_r": Vector3(0.05, 0.0, 0.0), "hand_r": Vector3(-1.3, 0.0, 0.0), "arm_l": Vector3(0.3, 0.0, -1.0), "spine": Vector3(-0.15, 0.0, 0.0)}],
+]
 
 
 func _ready() -> void:
@@ -576,6 +590,52 @@ func animate(delta: float, state: String, speed: float) -> void:
 		tg[b] = Vector3.ZERO
 	var hy: float = 0.0
 	match state:
+		"attack":
+			var poses: Array = ATTACK_POSES[clampi(attack_kind, 0, 3)]
+			var a0: Dictionary = poses[0]
+			var a1: Dictionary = poses[1]
+			# préparation (pose de départ), coup rapide, puis maintien
+			var e: float = smoothstep(0.18, 0.55, attack_t)
+			for b in a0:
+				tg[b] = (a0[b] as Vector3).lerp(a1[b] as Vector3, e)
+			if attack_kind < 3:
+				tg["arm_l"] = Vector3(0.5, 0.0, -0.4)
+				tg["fore_l"] = Vector3(0.8, 0.0, 0.0)
+			var right_lead: bool = attack_kind == 1
+			tg["thigh_l"] = Vector3(-0.3 if right_lead else 0.45, 0.0, -0.06)
+			tg["shin_l"] = Vector3(-0.2 if right_lead else -0.4, 0.0, 0.0)
+			tg["thigh_r"] = Vector3(0.45 if right_lead else -0.3, 0.0, 0.08)
+			tg["shin_r"] = Vector3(-0.4 if right_lead else -0.2, 0.0, 0.0)
+			if attack_kind == 2:
+				tg["thigh_l"] = Vector3(0.6, 0.0, -0.05)
+				tg["shin_l"] = Vector3(-0.5, 0.0, 0.0)
+				tg["thigh_r"] = Vector3(-0.4, 0.0, 0.08)
+				hy = -0.08 * e
+			elif attack_kind == 3:
+				tg["thigh_l"] = Vector3(0.4, 0.0, -0.12)
+				tg["thigh_r"] = Vector3(0.4, 0.0, 0.12)
+				tg["shin_l"] = Vector3(-0.6, 0.0, 0.0)
+				tg["shin_r"] = Vector3(-0.6, 0.0, 0.0)
+				hy = -0.12
+			tg["coat"] = Vector3(-0.35, 0.0, 0.0)
+		"hurt":
+			tg["spine"] = Vector3(0.25, 0.0, 0.0)
+			tg["head"] = Vector3(-0.2, 0.0, 0.0)
+			tg["arm_l"] = Vector3(0.3, 0.0, -0.5)
+			tg["arm_r"] = Vector3(0.3, 0.0, 0.5)
+			tg["coat"] = Vector3(0.2, 0.0, 0.0)
+			hy = -0.05
+		"dead":
+			tg["thigh_l"] = Vector3(1.4, 0.0, -0.1)
+			tg["thigh_r"] = Vector3(1.4, 0.0, 0.1)
+			tg["shin_l"] = Vector3(-2.1, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-2.1, 0.0, 0.0)
+			tg["spine"] = Vector3(0.5, 0.0, 0.0)
+			tg["chest"] = Vector3(0.3, 0.0, 0.0)
+			tg["head"] = Vector3(0.6, 0.0, 0.0)
+			tg["arm_l"] = Vector3(-0.2, 0.0, -0.3)
+			tg["arm_r"] = Vector3(-0.2, 0.0, 0.3)
+			hy = -0.72
 		"walk", "run":
 			var rf: float = clampf((speed - 2.4) / 3.8, 0.0, 1.0)
 			var amp: float = lerpf(0.5, 1.0, rf)
@@ -650,7 +710,8 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["arm_r"] = Vector3(0.22, 0.0, 0.20)
 			tg["fore_r"] = Vector3(0.30, 0.0, 0.0)
 			tg["coat"] = Vector3(-0.04 + br * 0.02, 0.0, 0.0)
-	var k: float = 1.0 - exp(-16.0 * delta)
+	var rate: float = 34.0 if state == "attack" else 16.0
+	var k: float = 1.0 - exp(-rate * delta)
 	for b in POSED:
 		var cur: Vector3 = current[b]
 		var goal: Vector3 = tg[b]

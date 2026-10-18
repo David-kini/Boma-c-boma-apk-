@@ -15,6 +15,12 @@ var settings: Control
 var info_text: Label
 var quality_buttons: Array = []
 var zone_banner: Label
+var hp_fill: ColorRect
+var en_fill: ColorRect
+var hp_text: Label
+var combo_label: Label
+var ko_label: Label
+var _combo_pop: float = 0.0
 var _last_zone: String = ""
 var _banner_t: float = 0.0
 var _tick: float = 0.0
@@ -23,16 +29,72 @@ var _tick: float = 0.0
 func setup(p: Node3D, w: Node3D) -> void:
 	player = p
 	world = w
+	p.connect("hp_changed", _on_hp)
+	p.connect("energy_changed", _on_energy)
+	p.connect("combo_changed", _on_combo)
+	_on_hp(float(p.get("hp")), float(p.get("max_hp")))
+	_on_energy(float(p.get("energy")), float(p.get("max_energy")))
+
+
+func _bar(pos: Vector2, size: Vector2, col: Color) -> ColorRect:
+	var bg: ColorRect = ColorRect.new()
+	bg.position = pos
+	bg.size = size
+	bg.color = Color(0.0, 0.0, 0.0, 0.55)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+	var fill: ColorRect = ColorRect.new()
+	fill.position = Vector2(2.0, 2.0)
+	fill.size = size - Vector2(4.0, 4.0)
+	fill.color = col
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.add_child(fill)
+	return fill
+
+
+func _on_hp(v: float, m: float) -> void:
+	hp_fill.size.x = 256.0 * clampf(v / m, 0.0, 1.0)
+	hp_fill.color = Color(0.85, 0.15, 0.15) if v / m < 0.3 else Color(0.25, 0.85, 0.35)
+	hp_text.text = "%d / %d" % [int(ceil(v)), int(m)]
+
+
+func _on_energy(v: float, m: float) -> void:
+	en_fill.size.x = 196.0 * clampf(v / m, 0.0, 1.0)
+
+
+func _on_combo(count: int) -> void:
+	combo_label.visible = count >= 2
+	combo_label.text = "COMBO x%d" % count
+	_combo_pop = 0.15
 
 
 func _ready() -> void:
 	layer = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	zone_label = _make_label(Vector2(20.0, 12.0), 26)
-	info_label = _make_label(Vector2(20.0, 48.0), 15)
+	zone_label = _make_label(Vector2(20.0, 76.0), 22)
+	info_label = _make_label(Vector2(20.0, 106.0), 14)
+	# barres de vie (vert/rouge) et d'énergie (or)
+	hp_fill = _bar(Vector2(20.0, 14.0), Vector2(260.0, 22.0), Color(0.25, 0.85, 0.35))
+	hp_text = _make_label(Vector2(26.0, 14.0), 15)
+	en_fill = _bar(Vector2(20.0, 42.0), Vector2(200.0, 14.0), Color(1.0, 0.78, 0.2))
+	combo_label = _make_label(Vector2(0.0, 0.0), 34)
+	combo_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	combo_label.offset_left = -300.0
+	combo_label.offset_right = -40.0
+	combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	combo_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	combo_label.visible = false
+	ko_label = _make_label(Vector2(0.0, 0.0), 56)
+	ko_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	ko_label.offset_left = -300.0
+	ko_label.offset_right = 300.0
+	ko_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ko_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.25))
+	ko_label.text = "K.O. — retour au camp..."
+	ko_label.visible = false
 	help_label = _make_label(Vector2(20.0, 505.0), 14)
 	help_label.visible = not DisplayServer.is_touchscreen_available()
-	help_label.text = "ZQSD/WASD bouger · Maj courir · Espace sauter · C esquiver · flèches ou clic droit : caméra · Échap : paramètres"
+	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J ou clic gauche : attaquer (4 coups) · clic droit/flèches : caméra · Échap : paramètres"
 	zone_banner = Label.new()
 	zone_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	zone_banner.offset_top = 95.0
@@ -169,6 +231,11 @@ func _process(delta: float) -> void:
 	if _banner_t > 0.0:
 		_banner_t -= delta
 		zone_banner.modulate.a = clampf(_banner_t, 0.0, 1.0)
+	if _combo_pop > 0.0:
+		_combo_pop -= delta
+		combo_label.scale = Vector2.ONE * (1.0 + _combo_pop * 2.0)
+	if player != null:
+		ko_label.visible = bool(player.get("is_dead"))
 	_tick -= delta
 	if _tick > 0.0 or player == null or world == null:
 		return

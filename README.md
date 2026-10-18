@@ -11,6 +11,12 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Combat (v0.7, phase 3)
+- Combo d'épée en 4 coups (taille, revers, coup vertical, tour complet) avec visée automatique, élan, traînée électrique, éclats d'impact, chiffres de dégâts, secousse de caméra.
+- Héros : 120 PV (régénération hors combat), énergie gagnée en frappant (servira à la Transformation Divine), esquive invincible, K.O. puis retour au camp.
+- Ennemis squelettes KayKit (IA : repos, poursuite, attaque avec préparation visible, touché, mort) avec barre de vie ; réapparition 40 s après la mort quand le joueur est loin ; Gardien du repaire (400 PV) en aperçu du boss.
+- Commandes : bouton ATTAQUE (tactile), J / Entrée / clic gauche (PC).
+
 ## Ressources 3D CC0 (v0.6)
 - Modèles KayKit (CC0) intégrés : arbres, rochers, nuages, village de Boma (maisons, taverne, moulin, puits, marché, forge, église, tour), camp (tente, tonneaux, caisses), cimetière (crypte, tombes, portail, lanternes), torches, bannières, coffre, nénuphars.
 - Personnages riggés et animés CC0 : aventuriers (PNJ) et squelettes (futurs ennemis) ; bibliothèques d'animations extraites dans `Assets/Animations`.

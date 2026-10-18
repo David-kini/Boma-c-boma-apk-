@@ -17,10 +17,16 @@ const ELEMENTS: Dictionary = {
 
 @export var element: String = "eclair"
 var arcs_enabled: bool = true
+var trail_on: bool = false         # traînée électrique pendant les attaques
+var _trail: Array = []             # [base, pointe, âge] en coordonnées monde
+var _trail_mesh: ImmediateMesh
+var _trail_mi: MeshInstance3D
+const TRAIL_LIFE: float = 0.20
 var _arc_mesh: ImmediateMesh
 var _arc_mi: MeshInstance3D
 var _arc_t: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _trail_col: Color = Color(0.6, 0.85, 1.0)
 
 
 func _ready() -> void:
@@ -33,6 +39,16 @@ func _ready() -> void:
 	_arc_mi.material_override = _unshaded(e["arc"], true)
 	_arc_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_arc_mi)
+	_trail_mesh = ImmediateMesh.new()
+	_trail_mi = MeshInstance3D.new()
+	_trail_mi.mesh = _trail_mesh
+	_trail_mi.top_level = true
+	var tm: StandardMaterial3D = _unshaded(Color(1.0, 1.0, 1.0, 1.0), true)
+	tm.vertex_color_use_as_albedo = true
+	_trail_mi.material_override = tm
+	_trail_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_trail_mi)
+	_trail_col = e["arc"]
 
 
 func _unshaded(c: Color, additive: bool) -> StandardMaterial3D:
@@ -178,6 +194,7 @@ func _build_hilt(e: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_trail(delta)
 	if not arcs_enabled:
 		return
 	_arc_t -= delta
@@ -218,3 +235,41 @@ func _rebuild_arcs() -> void:
 				_arc_mesh.surface_add_vertex(p + Vector3(-wd, 0.0, 0.0))
 			prev = p
 	_arc_mesh.surface_end()
+
+
+## Traînée : ruban entre la base et la pointe de la lame, sur les 0,2 dernières secondes.
+func _update_trail(delta: float) -> void:
+	for smp in _trail:
+		smp[2] = float(smp[2]) + delta
+	while _trail.size() > 0 and float(_trail[0][2]) > TRAIL_LIFE:
+		_trail.pop_front()
+	if trail_on:
+		var base: Vector3 = global_transform * Vector3(0.0, BLADE_START + 0.1, 0.0)
+		var tip: Vector3 = global_transform * Vector3(0.0, BLADE_START + BLADE_LEN, 0.0)
+		_trail.append([base, tip, 0.0])
+	_trail_mesh.clear_surfaces()
+	if _trail.size() < 2:
+		return
+	_trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(_trail.size() - 1):
+		var s0: Array = _trail[i]
+		var s1: Array = _trail[i + 1]
+		var a0: float = 1.0 - float(s0[2]) / TRAIL_LIFE
+		var a1: float = 1.0 - float(s1[2]) / TRAIL_LIFE
+		var c0: Color = Color(_trail_col.r * 0.3, _trail_col.g * 0.5, _trail_col.b, a0 * 0.35)
+		var c1: Color = Color(_trail_col.r * 0.3, _trail_col.g * 0.5, _trail_col.b, a1 * 0.35)
+		var w0: Color = Color(0.55, 0.85, 1.0, a0 * 0.9)
+		var w1: Color = Color(0.55, 0.85, 1.0, a1 * 0.9)
+		_trail_mesh.surface_set_color(c0)
+		_trail_mesh.surface_add_vertex(s0[0])
+		_trail_mesh.surface_set_color(w0)
+		_trail_mesh.surface_add_vertex(s0[1])
+		_trail_mesh.surface_set_color(c1)
+		_trail_mesh.surface_add_vertex(s1[0])
+		_trail_mesh.surface_set_color(w0)
+		_trail_mesh.surface_add_vertex(s0[1])
+		_trail_mesh.surface_set_color(w1)
+		_trail_mesh.surface_add_vertex(s1[1])
+		_trail_mesh.surface_set_color(c1)
+		_trail_mesh.surface_add_vertex(s1[0])
+	_trail_mesh.surface_end()

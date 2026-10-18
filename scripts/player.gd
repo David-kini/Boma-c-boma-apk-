@@ -1,9 +1,26 @@
 extends CharacterBody3D
-## Joueur : marche, course, saut (coyote time + tampon), esquive, récupération
-## après une chute. Déplacement relatif à la caméra. Origine = pieds.
+## Joueur : marche, course, saut (coyote time + tampon), esquive (invincible),
+## récupération après une chute, COMBAT : combo d'épée en 4 coups avec visée
+## automatique, points de vie, énergie, mort et réapparition.
+## Déplacement relatif à la caméra. Origine = pieds.
+
+signal hp_changed(hp: float, max_hp: float)
+signal energy_changed(energy: float, max_energy: float)
+signal combo_changed(count: int)
 
 const PlayerRig = preload("res://scripts/player_rig.gd")
 const Sword = preload("res://scripts/sword.gd")
+const CombatFx = preload("res://scripts/combat_fx.gd")
+
+## Combo : durée (s), instant du coup (fraction), dégâts, portée (m), angle (cos mini,
+## -1 = tout autour), élan vers l'avant (m/s)
+const ATTACKS: Array = [
+	{"dur": 0.40, "hit": 0.42, "dmg": 10.0, "range": 2.7, "arc": 0.25, "lunge": 3.5},
+	{"dur": 0.40, "hit": 0.42, "dmg": 12.0, "range": 2.7, "arc": 0.25, "lunge": 3.5},
+	{"dur": 0.50, "hit": 0.52, "dmg": 16.0, "range": 3.0, "arc": 0.15, "lunge": 4.5},
+	{"dur": 0.62, "hit": 0.45, "dmg": 26.0, "range": 3.3, "arc": -1.0, "lunge": 2.0},
+]
+const AIM_RADIUS: float = 6.0
 
 const WALK_SPEED: float = 2.4
 const RUN_SPEED: float = 6.2
@@ -34,10 +51,29 @@ var _fall_speed: float = 0.0
 var _was_on_floor: bool = true
 var face_yaw: float = 0.0
 
+# --- combat
+var max_hp: float = 120.0
+var hp: float = 120.0
+var max_energy: float = 100.0
+var energy: float = 0.0
+var is_dead: bool = false
+var combo_count: int = 0
+var _atk_i: int = -1            # coup en cours (-1 = aucun)
+var _atk_t: float = 0.0
+var _atk_hit: bool = false
+var _atk_queued: bool = false
+var _combo_next: int = 0        # prochain coup du combo
+var _combo_reset: float = 0.0
+var _combo_timer: float = 0.0
+var _hurt_t: float = 0.0
+var _dead_t: float = 0.0
+var _since_hit: float = 99.0
+
 
 func _ready() -> void:
+	add_to_group("player")
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 1 | 4
 	floor_snap_length = 0.4
 	floor_max_angle = deg_to_rad(52.0)
 	var cs: CollisionShape3D = CollisionShape3D.new()
@@ -134,10 +170,33 @@ func _physics_process(delta: float) -> void:
 	var has_input: bool = wish.length() > 0.1
 	var facing: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
 
-	# esquive
+	_update_timers(delta)
+	if is_dead:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		move_and_slide()
+		state = "dead"
+		_dead_t -= delta
+		if _dead_t <= 0.0:
+			_respawn()
+		return
+
+	# attaque (combo)
+	if GameInput.attack_buffer > 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
+		if _atk_i < 0:
+			GameInput.consume_attack()
+			_start_attack(_combo_next)
+		elif _atk_t > float(ATTACKS[_atk_i]["dur"]) * 0.35:
+			GameInput.consume_attack()
+			_atk_queued = true
+	if _atk_i >= 0:
+		_process_attack(delta)
+
+	# esquive (annule l'attaque en cours)
 	if GameInput.dodge_buffer > 0.0 and _dodge_cd <= 0.0 and _dodge_t <= 0.0 \
 			and _land_t <= 0.0 and (on_floor or _coyote > 0.0):
 		GameInput.consume_dodge()
+		_end_attack()
 		_dodge_t = DODGE_TIME
 		_dodge_cd = DODGE_COOLDOWN
 		_dodge_dir = wish.normalized() if has_input else facing
@@ -148,6 +207,19 @@ func _physics_process(delta: float) -> void:
 		var f: float = 0.5 + 0.5 * clampf(_dodge_t / DODGE_TIME, 0.0, 1.0)
 		velocity.x = _dodge_dir.x * DODGE_SPEED * f
 		velocity.z = _dodge_dir.z * DODGE_SPEED * f
+	elif _hurt_t > 0.0:
+		invulnerable = false
+		velocity.x = move_toward(velocity.x, 0.0, 18.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 18.0 * delta)
+	elif _atk_i >= 0:
+		invulnerable = false
+		# élan vers l'avant au début du coup, presque immobile ensuite
+		var a: Dictionary = ATTACKS[_atk_i]
+		var lunge: float = float(a["lunge"]) if _atk_t < 0.15 else 0.0
+		var fwd: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
+		var mv_slow: Vector3 = wish.normalized() * 0.8 if has_input else Vector3.ZERO
+		velocity.x = fwd.x * lunge + mv_slow.x
+		velocity.z = fwd.z * lunge + mv_slow.z
 	else:
 		invulnerable = false
 		var speed: float = RUN_SPEED if GameInput.wants_run() else WALK_SPEED
@@ -170,7 +242,11 @@ func _physics_process(delta: float) -> void:
 
 	hspeed = Vector2(velocity.x, velocity.z).length()
 	var air: bool = not is_on_floor()
-	if _dodge_t > 0.0:
+	if _hurt_t > 0.0:
+		state = "hurt"
+	elif _atk_i >= 0:
+		state = "attack"
+	elif _dodge_t > 0.0:
 		state = "dodge"
 	elif _land_t > 0.0:
 		state = "land"
@@ -185,6 +261,8 @@ func _physics_process(delta: float) -> void:
 
 	if _dodge_t > 0.0:
 		face_yaw = atan2(-_dodge_dir.x, -_dodge_dir.z)
+	elif _atk_i >= 0 or _hurt_t > 0.0:
+		pass
 	elif hspeed > 0.5:
 		face_yaw = atan2(-velocity.x, -velocity.z)
 
@@ -197,8 +275,159 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	rig.rotation.y = lerp_angle(rig.rotation.y, face_yaw, 1.0 - exp(-14.0 * delta))
+	var spin: float = 0.0
+	if _atk_i == 3:
+		# coup final : tour complet sur soi-même
+		var tt: float = clampf(_atk_t / float(ATTACKS[3]["dur"]), 0.0, 1.0)
+		spin = TAU * ease(tt, 0.5)
+	if spin != 0.0:
+		rig.rotation.y = face_yaw + spin
+	else:
+		rig.rotation.y = lerp_angle(rig.rotation.y, face_yaw, 1.0 - exp(-14.0 * delta))
 	if debug_anim != "":
+		if debug_anim.begins_with("attack"):
+			rig.set("attack_kind", int(debug_anim.substr(6, 1)))
+			rig.set("attack_t", float(debug_anim.substr(8)) if debug_anim.length() > 8 else 0.5)
+			rig.call("animate", delta, "attack", 0.0)
+			return
 		rig.call("animate", delta, debug_anim, 6.2 if debug_anim == "run" else 2.4)
 		return
+	if _atk_i >= 0:
+		rig.set("attack_kind", _atk_i)
+		rig.set("attack_t", clampf(_atk_t / float(ATTACKS[_atk_i]["dur"]), 0.0, 1.0))
 	rig.call("animate", delta, state, hspeed)
+
+
+# ================================================================ combat
+
+func _update_timers(delta: float) -> void:
+	_hurt_t -= delta
+	_since_hit += delta
+	if _atk_i < 0:
+		_combo_reset -= delta
+		if _combo_reset <= 0.0:
+			_combo_next = 0
+	if combo_count > 0:
+		_combo_timer -= delta
+		if _combo_timer <= 0.0:
+			combo_count = 0
+			combo_changed.emit(0)
+	# régénération hors combat
+	if not is_dead and _since_hit > 6.0 and hp < max_hp:
+		hp = minf(hp + 4.0 * delta, max_hp)
+		hp_changed.emit(hp, max_hp)
+
+
+func _nearest_enemy(radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_d: float = radius
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var d: float = en.global_position.distance_to(global_position)
+		if d < best_d:
+			best_d = d
+			best = en
+	return best
+
+
+func _start_attack(i: int) -> void:
+	_atk_i = i
+	_atk_t = 0.0
+	_atk_hit = false
+	_atk_queued = false
+	# visée automatique vers l'ennemi le plus proche (pratique au tactile)
+	var target: Node3D = _nearest_enemy(AIM_RADIUS)
+	if target != null:
+		var d: Vector3 = target.global_position - global_position
+		face_yaw = atan2(-d.x, -d.z)
+	var w: Node = rig.get("weapon")
+	if w != null:
+		w.set("trail_on", true)
+
+
+func _end_attack() -> void:
+	if _atk_i >= 0:
+		_combo_next = (_atk_i + 1) % ATTACKS.size()
+		_combo_reset = 0.6
+	_atk_i = -1
+	var w: Node = rig.get("weapon")
+	if w != null:
+		w.set("trail_on", false)
+
+
+func _process_attack(delta: float) -> void:
+	var a: Dictionary = ATTACKS[_atk_i]
+	_atk_t += delta
+	var dur: float = float(a["dur"])
+	if not _atk_hit and _atk_t >= dur * float(a["hit"]):
+		_atk_hit = true
+		_deal_hits(a)
+	if _atk_t >= dur:
+		var queued: bool = _atk_queued
+		var nxt: int = (_atk_i + 1) % ATTACKS.size()
+		_end_attack()
+		if queued:
+			_start_attack(nxt)
+
+
+func _deal_hits(a: Dictionary) -> void:
+	var fwd: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
+	var hits: int = 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var to_e: Vector3 = en.global_position - global_position
+		to_e.y = 0.0
+		var dist: float = to_e.length()
+		if dist > float(a["range"]):
+			continue
+		if float(a["arc"]) > -1.0 and dist > 0.4 and fwd.dot(to_e.normalized()) < float(a["arc"]):
+			continue
+		en.call("take_damage", float(a["dmg"]), global_position)
+		hits += 1
+	if hits > 0:
+		combo_count += hits
+		_combo_timer = 2.2
+		combo_changed.emit(combo_count)
+		energy = minf(energy + 5.0 * float(hits), max_energy)
+		energy_changed.emit(energy, max_energy)
+		if cam != null:
+			cam.call("shake", 0.35 if _atk_i == 3 else 0.15)
+
+
+## Appelé par les ennemis.
+func take_damage(amount: float, from_pos: Vector3) -> void:
+	if invulnerable or is_dead:
+		return
+	hp = maxf(hp - amount, 0.0)
+	_since_hit = 0.0
+	hp_changed.emit(hp, max_hp)
+	CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.2, 0.0), Color(1.0, 0.3, 0.25), 0.7)
+	CombatFx.number(get_parent(), global_position + Vector3(0.0, 2.1, 0.0), int(round(amount)), Color(1.0, 0.35, 0.3))
+	if cam != null:
+		cam.call("shake", 0.3)
+	_end_attack()
+	if hp <= 0.0:
+		is_dead = true
+		_dead_t = 3.0
+		combo_count = 0
+		combo_changed.emit(0)
+		return
+	_hurt_t = 0.3
+	var push: Vector3 = global_position - from_pos
+	push.y = 0.0
+	var k: Vector3 = push.normalized() * 6.0
+	velocity.x = k.x
+	velocity.z = k.z
+
+
+func _respawn() -> void:
+	is_dead = false
+	hp = max_hp
+	hp_changed.emit(hp, max_hp)
+	if world != null:
+		global_position = world.call("spawn_point")
+	velocity = Vector3.ZERO

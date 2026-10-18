@@ -1,6 +1,6 @@
 extends Control
 ## Commandes tactiles : joystick flottant (moitié gauche), glisser pour la caméra
-## (moitié droite), boutons SAUT / ESQ. et MENU (paramètres).
+## (moitié droite), boutons ATTAQUE / SAUT / ESQ. et MENU (paramètres).
 ## Affiché seulement si un écran tactile est disponible.
 
 const JOY_RADIUS: float = 90.0
@@ -23,8 +23,9 @@ func _ready() -> void:
 func _buttons() -> Dictionary:
 	var s: Vector2 = size
 	return {
-		"jump": [Vector2(s.x - 120.0, s.y - 130.0), 56.0, "SAUT"],
-		"dodge": [Vector2(s.x - 250.0, s.y - 80.0), 46.0, "ESQ."],
+		"attack": [Vector2(s.x - 125.0, s.y - 125.0), 64.0, "ATTAQUE"],
+		"jump": [Vector2(s.x - 275.0, s.y - 75.0), 44.0, "SAUT"],
+		"dodge": [Vector2(s.x - 95.0, s.y - 275.0), 44.0, "ESQ."],
 		"menu": [Vector2(s.x - 58.0, 50.0), 34.0, "MENU"],
 	}
 
@@ -77,7 +78,9 @@ func _touch_down(idx: int, pos: Vector2) -> void:
 
 
 func _press(bname: String) -> void:
-	if bname == "jump":
+	if bname == "attack":
+		GameInput.attack_buffer = GameInput.ATTACK_BUFFER
+	elif bname == "jump":
 		GameInput.jump_buffer = GameInput.BUFFER_TIME
 	elif bname == "dodge":
 		GameInput.dodge_buffer = GameInput.BUFFER_TIME

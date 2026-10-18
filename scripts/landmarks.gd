@@ -715,9 +715,4 @@ func _npcs() -> void:
 	_npc(CHR + "Adventurers/Barbarian.glb", "Cheer", v + Vector2(4.0, 4.0), PI * 0.8)
 	_npc(CHR + "Adventurers/Mage.glb", "Spellcasting", v + Vector2(-5.0, -3.0), 0.7)
 	_npc(CHR + "Adventurers/Knight.glb", "Idle", v + Vector2(10.0, -10.0), -2.3)
-	var m: Vector2 = WorldData.ZONES["monstres"]["center"]
-	_npc(CHR + "Skeletons/Skeleton_Warrior.glb", "Idle_Combat", m + Vector2(0.0, 30.0), 0.0)
-	_npc(CHR + "Skeletons/Skeleton_Minion.glb", "Idle", m + Vector2(-6.0, 26.0), 0.4)
-	_npc(CHR + "Skeletons/Skeleton_Rogue.glb", "Idle_B", m + Vector2(6.0, 25.0), -0.4)
-	_npc(CHR + "Skeletons/Skeleton_Mage.glb", "Spellcasting", m + Vector2(0.0, -18.0), 0.0)
-	_npc(CHR + "Skeletons/Skeleton_Minion.glb", "Skeletons_Inactive_Floor_Pose", m + Vector2(12.0, 5.0), 1.2)
+	# les squelettes sont maintenant de vrais ennemis (enemy_spawner.gd)
