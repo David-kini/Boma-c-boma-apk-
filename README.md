@@ -11,6 +11,15 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Pouvoirs, armes, progression (v0.8, phases 4-5)
+- 5e coup du combo : frappe montante + éclair tout autour (32 dégâts).
+- Vol magique de 10 s (VOL / F) : SAUT = monter, ESQ. = descendre ; recharge 5 s ; 4 ailes (ange, démon, éclair, or) animées.
+- Transformation Divine de 10 s (DIVIN / T, énergie pleine) : aura dorée, onde de choc, dégâts x2, vitesse x1,3, dégâts reçus /2, lame divine.
+- 10 armes (ARME / R), débloquées du niveau 1 au niveau 10 (forme, élément, dégâts, vitesse).
+- XP gagnée sur les ennemis, niveaux (+10 PV max par niveau), sauvegarde automatique (user://sauvegarde.cfg).
+- Sons synthétisés (aucun fichier requis) ; tes sons/musique dans Assets/Audio les remplacent.
+- Menu pause : qualité, ailes, arme, avec aperçu du héros.
+
 ## Combat (v0.7, phase 3)
 - Combo d'épée en 4 coups (taille, revers, coup vertical, tour complet) avec visée automatique, élan, traînée électrique, éclats d'impact, chiffres de dégâts, secousse de caméra.
 - Héros : 120 PV (régénération hors combat), énergie gagnée en frappant (servira à la Transformation Divine), esquive invincible, K.O. puis retour au camp.

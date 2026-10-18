@@ -52,6 +52,7 @@ func _spawn(i: int) -> void:
 	e.set("model_scale", float(s[5]))
 	e.set("display_name", String(s[6]))
 	e.set("world", world)
+	e.set("xp_value", 300 if float(s[2]) >= 300.0 else int(float(s[2]) / 3.0))
 	e.name = "Ennemi_%d" % i
 	e.position = Vector3(p.x, float(world.call("ground_height", p.x, p.y)) + 0.3, p.y)
 	add_child(e)

@@ -1,6 +1,6 @@
 extends Control
 ## Commandes tactiles : joystick flottant (moitié gauche), glisser pour la caméra
-## (moitié droite), boutons ATTAQUE / SAUT / ESQ. et MENU (paramètres).
+## (moitié droite), boutons ATTAQUE / SAUT / ESQ. / VOL / DIVIN / ARME et MENU.
 ## Affiché seulement si un écran tactile est disponible.
 
 const JOY_RADIUS: float = 90.0
@@ -26,6 +26,9 @@ func _buttons() -> Dictionary:
 		"attack": [Vector2(s.x - 125.0, s.y - 125.0), 64.0, "ATTAQUE"],
 		"jump": [Vector2(s.x - 275.0, s.y - 75.0), 44.0, "SAUT"],
 		"dodge": [Vector2(s.x - 95.0, s.y - 275.0), 44.0, "ESQ."],
+		"fly": [Vector2(s.x - 245.0, s.y - 205.0), 40.0, "VOL"],
+		"divine": [Vector2(s.x - 400.0, s.y - 72.0), 40.0, "DIVIN"],
+		"weapon": [Vector2(s.x - 58.0, 125.0), 30.0, "ARME"],
 		"menu": [Vector2(s.x - 58.0, 50.0), 34.0, "MENU"],
 	}
 
@@ -84,6 +87,12 @@ func _press(bname: String) -> void:
 		GameInput.jump_buffer = GameInput.BUFFER_TIME
 	elif bname == "dodge":
 		GameInput.dodge_buffer = GameInput.BUFFER_TIME
+	elif bname == "fly":
+		GameInput.fly_buffer = GameInput.BUFFER_TIME
+	elif bname == "divine":
+		GameInput.divine_buffer = GameInput.BUFFER_TIME
+	elif bname == "weapon":
+		GameInput.weapon_buffer = GameInput.BUFFER_TIME
 	elif bname == "menu":
 		_reset()
 		get_parent().call("open_settings")
@@ -129,7 +138,17 @@ func _draw() -> void:
 		var center: Vector2 = def[0]
 		var rad: float = float(def[1])
 		var on: bool = bool(pressed.get(bname, false))
+		if bname == "divine" and _divine_ready():
+			on = fmod(Time.get_ticks_msec() * 0.004, 2.0) < 1.0
 		draw_circle(center, rad, Color(1.0, 0.85, 0.3, 0.45 if on else 0.18))
 		draw_arc(center, rad, 0.0, TAU, 32, Color(1.0, 0.85, 0.3, 0.8), 2.0)
 		draw_string(font, center + Vector2(-rad, 7.0), String(def[2]),
 				HORIZONTAL_ALIGNMENT_CENTER, rad * 2.0, 18, Color(1.0, 1.0, 1.0, 0.9))
+
+
+func _divine_ready() -> bool:
+	var ps: Array = get_tree().get_nodes_in_group("player")
+	if ps.is_empty():
+		return false
+	var p: Node = ps[0]
+	return float(p.get("energy")) >= float(p.get("max_energy")) and not bool(p.get("is_divine"))

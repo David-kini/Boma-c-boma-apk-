@@ -74,6 +74,9 @@ const ATTACK_POSES: Array = [
 	 {"arm_r": Vector3(0.7, 0.0, 0.15), "fore_r": Vector3(0.1, 0.0, 0.0), "hand_r": Vector3(-1.2, 0.0, 0.0), "chest": Vector3(-0.15, 0.0, 0.0), "spine": Vector3(-0.35, 0.0, 0.0)}],
 	[{"arm_r": Vector3(1.55, 0.0, 1.3), "fore_r": Vector3(0.05, 0.0, 0.0), "hand_r": Vector3(-1.3, 0.0, 0.0), "arm_l": Vector3(0.3, 0.0, -1.0), "spine": Vector3(-0.15, 0.0, 0.0)},
 	 {"arm_r": Vector3(1.55, 0.0, 1.3), "fore_r": Vector3(0.05, 0.0, 0.0), "hand_r": Vector3(-1.3, 0.0, 0.0), "arm_l": Vector3(0.3, 0.0, -1.0), "spine": Vector3(-0.15, 0.0, 0.0)}],
+	# 5e coup : frappe montante qui appelle l'éclair
+	[{"arm_r": Vector3(0.2, 0.0, 0.5), "fore_r": Vector3(0.6, 0.0, 0.0), "hand_r": Vector3(-0.3, 0.0, 0.0), "arm_l": Vector3(0.6, 0.0, -0.5), "spine": Vector3(-0.35, 0.0, 0.0), "chest": Vector3(0.0, 0.3, 0.0)},
+	 {"arm_r": Vector3(3.0, 0.0, 0.15), "fore_r": Vector3(0.05, 0.0, 0.0), "hand_r": Vector3(0.4, 0.0, 0.0), "arm_l": Vector3(2.6, 0.0, -0.2), "spine": Vector3(0.2, 0.0, 0.0), "chest": Vector3(0.0, 0.0, 0.0)}],
 ]
 
 
@@ -591,7 +594,7 @@ func animate(delta: float, state: String, speed: float) -> void:
 	var hy: float = 0.0
 	match state:
 		"attack":
-			var poses: Array = ATTACK_POSES[clampi(attack_kind, 0, 3)]
+			var poses: Array = ATTACK_POSES[clampi(attack_kind, 0, ATTACK_POSES.size() - 1)]
 			var a0: Dictionary = poses[0]
 			var a1: Dictionary = poses[1]
 			# préparation (pose de départ), coup rapide, puis maintien
@@ -611,6 +614,12 @@ func animate(delta: float, state: String, speed: float) -> void:
 				tg["shin_l"] = Vector3(-0.5, 0.0, 0.0)
 				tg["thigh_r"] = Vector3(-0.4, 0.0, 0.08)
 				hy = -0.08 * e
+			elif attack_kind == 4:
+				tg["thigh_l"] = Vector3(0.5 - 0.5 * e, 0.0, -0.08)
+				tg["thigh_r"] = Vector3(0.5 - 0.5 * e, 0.0, 0.08)
+				tg["shin_l"] = Vector3(-0.9 + 0.9 * e, 0.0, 0.0)
+				tg["shin_r"] = Vector3(-0.9 + 0.9 * e, 0.0, 0.0)
+				hy = -0.2 * (1.0 - e)
 			elif attack_kind == 3:
 				tg["thigh_l"] = Vector3(0.4, 0.0, -0.12)
 				tg["thigh_r"] = Vector3(0.4, 0.0, 0.12)
@@ -618,6 +627,20 @@ func animate(delta: float, state: String, speed: float) -> void:
 				tg["shin_r"] = Vector3(-0.6, 0.0, 0.0)
 				hy = -0.12
 			tg["coat"] = Vector3(-0.35, 0.0, 0.0)
+		"fly":
+			# vol : corps penché vers l'avant, jambes traînées, bras ouverts
+			var fl: float = sin(t * 3.0)
+			tg["spine"] = Vector3(-0.35 * clampf(speed / 8.0, 0.0, 1.0), 0.0, 0.0)
+			tg["head"] = Vector3(0.3 * clampf(speed / 8.0, 0.0, 1.0), 0.0, 0.0)
+			tg["thigh_l"] = Vector3(-0.15 + fl * 0.08, 0.0, -0.05)
+			tg["thigh_r"] = Vector3(-0.35 - fl * 0.08, 0.0, 0.05)
+			tg["shin_l"] = Vector3(-0.4, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-0.7, 0.0, 0.0)
+			tg["arm_l"] = Vector3(0.2, 0.0, -0.7)
+			tg["fore_l"] = Vector3(0.4, 0.0, 0.0)
+			tg["arm_r"] = Vector3(0.3, 0.0, 0.6)
+			tg["fore_r"] = Vector3(0.4, 0.0, 0.0)
+			tg["coat"] = Vector3(-0.9 + fl * 0.1, 0.0, 0.0)
 		"hurt":
 			tg["spine"] = Vector3(0.25, 0.0, 0.0)
 			tg["head"] = Vector3(-0.2, 0.0, 0.0)

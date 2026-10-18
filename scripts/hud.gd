@@ -20,6 +20,11 @@ var en_fill: ColorRect
 var hp_text: Label
 var combo_label: Label
 var ko_label: Label
+var xp_fill: ColorRect
+var lvl_label: Label
+var power_label: Label
+var wings_button: Button
+var weapon_button: Button
 var _combo_pop: float = 0.0
 var _last_zone: String = ""
 var _banner_t: float = 0.0
@@ -32,6 +37,9 @@ func setup(p: Node3D, w: Node3D) -> void:
 	p.connect("hp_changed", _on_hp)
 	p.connect("energy_changed", _on_energy)
 	p.connect("combo_changed", _on_combo)
+	p.connect("level_changed", _on_level)
+	p.connect("announce", show_banner)
+	_on_level(int(p.get("level")), int(p.get("xp")), int(p.call("xp_needed")))
 	_on_hp(float(p.get("hp")), float(p.get("max_hp")))
 	_on_energy(float(p.get("energy")), float(p.get("max_energy")))
 
@@ -62,6 +70,17 @@ func _on_energy(v: float, m: float) -> void:
 	en_fill.size.x = 196.0 * clampf(v / m, 0.0, 1.0)
 
 
+func _on_level(lv: int, xp: int, need: int) -> void:
+	lvl_label.text = "Niv. %d" % lv
+	xp_fill.size.x = 196.0 * clampf(float(xp) / float(need), 0.0, 1.0)
+
+
+## Grand message au centre-haut (niveau, arme, pouvoirs).
+func show_banner(text: String) -> void:
+	zone_banner.text = text
+	_banner_t = 3.0
+
+
 func _on_combo(count: int) -> void:
 	combo_label.visible = count >= 2
 	combo_label.text = "COMBO x%d" % count
@@ -71,12 +90,16 @@ func _on_combo(count: int) -> void:
 func _ready() -> void:
 	layer = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	zone_label = _make_label(Vector2(20.0, 76.0), 22)
-	info_label = _make_label(Vector2(20.0, 106.0), 14)
+	zone_label = _make_label(Vector2(20.0, 80.0), 22)
+	info_label = _make_label(Vector2(20.0, 110.0), 14)
 	# barres de vie (vert/rouge) et d'énergie (or)
 	hp_fill = _bar(Vector2(20.0, 14.0), Vector2(260.0, 22.0), Color(0.25, 0.85, 0.35))
 	hp_text = _make_label(Vector2(26.0, 14.0), 15)
 	en_fill = _bar(Vector2(20.0, 42.0), Vector2(200.0, 14.0), Color(1.0, 0.78, 0.2))
+	xp_fill = _bar(Vector2(20.0, 60.0), Vector2(200.0, 8.0), Color(0.45, 0.85, 1.0))
+	lvl_label = _make_label(Vector2(228.0, 40.0), 18)
+	power_label = _make_label(Vector2(290.0, 14.0), 18)
+	power_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	combo_label = _make_label(Vector2(0.0, 0.0), 34)
 	combo_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
 	combo_label.offset_left = -300.0
@@ -94,7 +117,7 @@ func _ready() -> void:
 	ko_label.visible = false
 	help_label = _make_label(Vector2(20.0, 505.0), 14)
 	help_label.visible = not DisplayServer.is_touchscreen_available()
-	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J ou clic gauche : attaquer (4 coups) · clic droit/flèches : caméra · Échap : paramètres"
+	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J/clic : attaquer (5 coups) · F voler · T Transformation · R arme · Échap : menu"
 	zone_banner = Label.new()
 	zone_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	zone_banner.offset_top = 95.0
@@ -134,28 +157,30 @@ func _build_settings() -> void:
 	add_child(settings)
 
 	var dim: ColorRect = ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.65)
+	dim.color = Color(0.0, 0.0, 0.0, 0.30)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	settings.add_child(dim)
 
+	# panneau à droite : le héros reste visible à gauche (aperçu de la personnalisation)
 	var center: CenterContainer = CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+	center.offset_left = -440.0
 	settings.add_child(center)
 
 	var panel: PanelContainer = PanelContainer.new()
 	center.add_child(panel)
 	var margin: MarginContainer = MarginContainer.new()
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 18)
+		margin.add_theme_constant_override(side, 12)
 	panel.add_child(margin)
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 8)
+	vb.add_theme_constant_override("separation", 5)
 	margin.add_child(vb)
 
 	var title: Label = Label.new()
-	title.text = "PARAMÈTRES"
+	title.text = "MENU / PAUSE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	vb.add_child(title)
 
@@ -170,28 +195,61 @@ func _build_settings() -> void:
 		b.text = String(GameSettings.QUALITY_NAMES[i])
 		b.toggle_mode = true
 		b.button_group = group
-		b.custom_minimum_size = Vector2(380.0, 50.0)
-		b.add_theme_font_size_override("font_size", 22)
+		b.custom_minimum_size = Vector2(380.0, 34.0)
+		b.add_theme_font_size_override("font_size", 17)
 		b.pressed.connect(_on_quality_button.bind(i))
 		vb.add_child(b)
 		quality_buttons.append(b)
 
 	info_text = Label.new()
 	info_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info_text.custom_minimum_size = Vector2(380.0, 44.0)
-	info_text.add_theme_font_size_override("font_size", 15)
+	info_text.custom_minimum_size = Vector2(380.0, 36.0)
+	info_text.add_theme_font_size_override("font_size", 13)
 	info_text.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	vb.add_child(info_text)
 
+	var perso: Label = Label.new()
+	perso.text = "Personnalisation"
+	perso.add_theme_font_size_override("font_size", 18)
+	vb.add_child(perso)
+	wings_button = Button.new()
+	wings_button.custom_minimum_size = Vector2(380.0, 40.0)
+	wings_button.add_theme_font_size_override("font_size", 20)
+	wings_button.pressed.connect(_on_wings_button)
+	vb.add_child(wings_button)
+	weapon_button = Button.new()
+	weapon_button.custom_minimum_size = Vector2(380.0, 40.0)
+	weapon_button.add_theme_font_size_override("font_size", 20)
+	weapon_button.pressed.connect(_on_weapon_button)
+	vb.add_child(weapon_button)
 	var resume: Button = Button.new()
 	resume.text = "Reprendre"
-	resume.custom_minimum_size = Vector2(380.0, 54.0)
+	resume.custom_minimum_size = Vector2(380.0, 46.0)
 	resume.add_theme_font_size_override("font_size", 22)
 	resume.pressed.connect(close_settings)
 	vb.add_child(resume)
 
 
+func _on_wings_button() -> void:
+	var variants: Array = ["ange", "demon", "eclair", "or"]
+	var cur: String = String(player.get("wings_variant"))
+	var nxt: String = variants[(variants.find(cur) + 1) % variants.size()]
+	player.call("set_wings", nxt)
+	_refresh_settings()
+
+
+func _on_weapon_button() -> void:
+	player.call("cycle_weapon")
+	_refresh_settings()
+
+
 func _refresh_settings() -> void:
+	if player != null:
+		var names: Dictionary = {"ange": "Ailes d'ange", "demon": "Ailes de démon", "eclair": "Ailes d'éclair", "or": "Ailes d'or"}
+		wings_button.text = "Ailes : " + String(names.get(String(player.get("wings_variant")), "?"))
+		var Weapons: GDScript = load("res://scripts/weapons.gd")
+		var d: Dictionary = Weapons.call("get_def", int(player.get("weapon_index")))
+		weapon_button.text = "Arme : " + String(d["name"]) + "  (Niv. %d)" % int(player.get("level"))
 	for i in range(quality_buttons.size()):
 		var b: Button = quality_buttons[i]
 		b.set_pressed_no_signal(i == GameSettings.quality)
@@ -207,11 +265,20 @@ func open_settings() -> void:
 	_refresh_settings()
 	settings.visible = true
 	get_tree().paused = true
+	# aperçu : les ailes s'affichent pendant que le menu est ouvert
+	var w: Node = player.get("wings")
+	if w != null:
+		w.process_mode = Node.PROCESS_MODE_ALWAYS
+		w.call("set_deployed", true)
 
 
 func close_settings() -> void:
 	settings.visible = false
 	get_tree().paused = false
+	var w: Node = player.get("wings")
+	if w != null:
+		w.process_mode = Node.PROCESS_MODE_INHERIT
+		w.call("set_deployed", bool(player.get("is_flying")))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -236,6 +303,14 @@ func _process(delta: float) -> void:
 		combo_label.scale = Vector2.ONE * (1.0 + _combo_pop * 2.0)
 	if player != null:
 		ko_label.visible = bool(player.get("is_dead"))
+		var txt: String = ""
+		if bool(player.get("is_flying")):
+			txt += "VOL %d s   " % int(ceil(float(player.get("fly_left"))))
+		if bool(player.get("is_divine")):
+			txt += "DIVIN %d s" % int(ceil(float(player.get("divine_left"))))
+		elif float(player.get("energy")) >= float(player.get("max_energy")):
+			txt += "Énergie pleine : DIVIN prêt !"
+		power_label.text = txt
 	_tick -= delta
 	if _tick > 0.0 or player == null or world == null:
 		return

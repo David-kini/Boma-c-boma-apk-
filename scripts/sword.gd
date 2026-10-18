@@ -2,7 +2,7 @@ extends Node3D
 ## Épée 3D (référence : épée d'éclair du concept art).
 ## Lame longue à bords dentelés (maillage généré), halo additif, garde dorée en ailes,
 ## gemme, poignée noire à bagues dorées, pommeau. Éclairs animés le long de la lame.
-## element : "eclair" (bleu), "feu" (rouge-orange), "divin" (or) — pour les futures armes.
+## element : eclair, feu, divin, glace, vide, poison, solaire, ombre (voir weapons.gd).
 ## Origine = centre de la poignée ; la lame pointe vers +Y.
 
 const BLADE_START: float = 0.15
@@ -13,9 +13,16 @@ const ELEMENTS: Dictionary = {
 	"eclair": {"core": Color(0.55, 0.80, 1.0), "glow": Color(0.10, 0.35, 1.0, 0.30), "arc": Color(0.75, 0.90, 1.0)},
 	"feu": {"core": Color(1.0, 0.65, 0.30), "glow": Color(1.0, 0.30, 0.05, 0.30), "arc": Color(1.0, 0.6, 0.2)},
 	"divin": {"core": Color(1.0, 0.90, 0.55), "glow": Color(1.0, 0.70, 0.15, 0.30), "arc": Color(1.0, 0.92, 0.6)},
+	"glace": {"core": Color(0.85, 0.97, 1.0), "glow": Color(0.55, 0.90, 1.0, 0.30), "arc": Color(0.9, 1.0, 1.0)},
+	"vide": {"core": Color(0.75, 0.45, 1.0), "glow": Color(0.45, 0.10, 0.90, 0.32), "arc": Color(0.85, 0.6, 1.0)},
+	"poison": {"core": Color(0.60, 1.0, 0.45), "glow": Color(0.20, 0.85, 0.15, 0.30), "arc": Color(0.7, 1.0, 0.5)},
+	"solaire": {"core": Color(1.0, 0.75, 0.30), "glow": Color(1.0, 0.45, 0.05, 0.32), "arc": Color(1.0, 0.85, 0.4)},
+	"ombre": {"core": Color(0.95, 0.20, 0.25), "glow": Color(0.40, 0.0, 0.05, 0.40), "arc": Color(1.0, 0.3, 0.3)},
 }
 
 @export var element: String = "eclair"
+@export var length_scale: float = 1.0     # longueur de lame (espadon > 1, épée courte < 1)
+@export var width_scale: float = 1.0
 var arcs_enabled: bool = true
 var trail_on: bool = false         # traînée électrique pendant les attaques
 var _trail: Array = []             # [base, pointe, âge] en coordonnées monde
@@ -72,8 +79,12 @@ func _gold() -> StandardMaterial3D:
 
 
 ## Demi-largeur de la lame à la position t (0 = garde, 1 = pointe) : bords en zigzag.
+func _blade_len() -> float:
+	return BLADE_LEN * length_scale
+
+
 func _half_width(tt: float) -> float:
-	var w: float = 0.075 * (1.0 - 0.30 * tt)
+	var w: float = 0.075 * width_scale * (1.0 - 0.30 * tt)
 	var zig: float = absf(fposmod(tt * 7.0, 1.0) - 0.5) * 2.0
 	w += 0.022 * zig * (1.0 - tt)
 	w *= 1.0 - smoothstep(0.82, 1.0, tt)
@@ -86,7 +97,7 @@ func _blade_mesh(scale_w: float, thick: float) -> ArrayMesh:
 	var n: int = 28
 	for i in range(n + 1):
 		var tt: float = float(i) / float(n)
-		var y: float = BLADE_START + tt * BLADE_LEN
+		var y: float = BLADE_START + tt * _blade_len()
 		var w: float = _half_width(tt) * scale_w
 		var th: float = thick * (1.0 - tt * 0.6)
 		# section en losange : bord droit, arête avant, bord gauche, arête arrière
@@ -217,7 +228,7 @@ func _rebuild_arcs() -> void:
 		for i in range(steps + 1):
 			var tt: float = lerpf(t0, t1, float(i) / float(steps))
 			var w: float = _half_width(tt)
-			var p: Vector3 = Vector3(side * (w + _rng.randf_range(-0.01, 0.06)), BLADE_START + tt * BLADE_LEN,
+			var p: Vector3 = Vector3(side * (w + _rng.randf_range(-0.01, 0.06)), BLADE_START + tt * _blade_len(),
 				_rng.randf_range(-0.02, 0.02))
 			if i > 0:
 				var wd: float = 0.006
@@ -245,7 +256,7 @@ func _update_trail(delta: float) -> void:
 		_trail.pop_front()
 	if trail_on:
 		var base: Vector3 = global_transform * Vector3(0.0, BLADE_START + 0.1, 0.0)
-		var tip: Vector3 = global_transform * Vector3(0.0, BLADE_START + BLADE_LEN, 0.0)
+		var tip: Vector3 = global_transform * Vector3(0.0, BLADE_START + _blade_len(), 0.0)
 		_trail.append([base, tip, 0.0])
 	_trail_mesh.clear_surfaces()
 	if _trail.size() < 2:

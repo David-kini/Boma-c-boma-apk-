@@ -13,6 +13,7 @@ var _n: int = 0
 
 
 func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	player = p
 	cam = c
 	path = String(args.get("capture", ""))
@@ -99,17 +100,32 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		(cam.get("camera") as Camera3D).fov = float(args["fov"])
 	if anim != "":
 		player.set("debug_anim", anim)
+	if args.has("level"):
+		player.set("level", int(args["level"]))
+	if args.has("weapon"):
+		player.call("_equip_weapon", int(args["weapon"]), false)
+	if args.has("wings"):
+		player.call("set_wings", String(args["wings"]))
+	if args.has("fly"):
+		GameInput.fly_buffer = 1.0
+	if args.has("divine"):
+		player.set("energy", 100.0)
+		GameInput.divine_buffer = 1.0
+	if args.has("menu"):
+		_open_menu_at = 25
 	autoattack = args.has("autoattack")
 	report = args.has("report")
 
 
 var autoattack: bool = false
+var _open_menu_at: int = -1
 var report: bool = false
 var _log_t: float = 0.0
 
 
 func _report() -> void:
-	var txt: String = "BILAN pos=%s joueur pv=%d etat=%s combo=%d energie=%d | ennemis:" % [
+	var txt: String = "BILAN niv=%d xp=%d vol=%s divin=%s " % [int(player.get("level")), int(player.get("xp")), str(player.get("is_flying")), str(player.get("is_divine"))]
+	txt += "pos=%s joueur pv=%d etat=%s combo=%d energie=%d | ennemis:" % [
 		str(player.global_position.snapped(Vector3(0.1, 0.1, 0.1))), int(player.get("hp")), String(player.get("state")), int(player.get("combo_count")), int(player.get("energy"))]
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var en: Node3D = e as Node3D
@@ -130,6 +146,8 @@ func _process(delta: float) -> void:
 			_log_t = 1.0
 			_report()
 	_n += 1
+	if _n == _open_menu_at:
+		get_parent().get("hud").call("open_settings")
 	if _n == frames:
 		var img: Image = get_viewport().get_texture().get_image()
 		img.save_png(path)

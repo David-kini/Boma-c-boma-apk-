@@ -11,6 +11,9 @@ var cam_delta: Vector2 = Vector2.ZERO    # glissement accumulé pour la caméra
 var jump_buffer: float = 0.0
 var dodge_buffer: float = 0.0
 var attack_buffer: float = 0.0
+var fly_buffer: float = 0.0       # bouton VOL / touche F
+var divine_buffer: float = 0.0    # bouton DIVIN / touche T
+var weapon_buffer: float = 0.0    # bouton ARME / touche R
 var zoom_delta: float = 0.0              # >0 = éloigner la caméra
 
 
@@ -21,6 +24,9 @@ func _process(delta: float) -> void:
 		dodge_buffer -= delta
 	if attack_buffer > 0.0:
 		attack_buffer -= delta
+	fly_buffer = maxf(fly_buffer - delta, 0.0)
+	divine_buffer = maxf(divine_buffer - delta, 0.0)
+	weapon_buffer = maxf(weapon_buffer - delta, 0.0)
 	var k: Vector2 = Vector2(
 		float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
 		float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
@@ -36,6 +42,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				jump_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_C:
 				dodge_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_F:
+				fly_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_T:
+				divine_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_R:
+				weapon_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_J or ke.physical_keycode == KEY_ENTER:
 				attack_buffer = ATTACK_BUFFER
 	elif event is InputEventMouseButton:

@@ -19,6 +19,7 @@ const SLEEP_DIST: float = 60.0
 @export var attack_range: float = 1.8
 @export var model_scale: float = 1.3
 @export var display_name: String = "Squelette"
+@export var xp_value: int = 10
 
 var hp: float = 60.0
 var state: String = "idle"
@@ -215,6 +216,10 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 		collision_layer = 0
 		collision_mask = 1
 		_bar_root.visible = false
+		Sfx.play("enemy_die")
+		if player != null and player.has_method("add_xp"):
+			player.call("add_xp", xp_value)
+			CombatFx.number(get_parent(), head + Vector3(0.0, 0.9, 0.0), xp_value, Color(0.5, 1.0, 0.6))
 		died.emit(self)
 		return
 	state = "hit"
