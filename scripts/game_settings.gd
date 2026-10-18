@@ -9,13 +9,13 @@ const VIEW_DISTANCE: Array = [320.0, 560.0, 900.0]
 const SHADOW_DISTANCE: Array = [0.0, 45.0, 90.0]
 const CONFIG_PATH: String = "user://settings.cfg"
 
-var quality: int = 1
+var quality: int = 0
 
 
 func _ready() -> void:
 	var cfg: ConfigFile = ConfigFile.new()
 	if cfg.load(CONFIG_PATH) == OK:
-		quality = clampi(int(cfg.get_value("graphics", "quality", 1)), 0, 2)
+		quality = clampi(int(cfg.get_value("graphics", "quality", 0)), 0, 2)
 
 
 func set_quality(level: int) -> void:
