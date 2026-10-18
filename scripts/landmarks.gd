@@ -7,6 +7,12 @@ extends RefCounted
 ## Les collisions sont regroupées dans un seul StaticBody3D par lieu.
 
 const WorldData = preload("res://scripts/world_data.gd")
+const ModelLibrary = preload("res://scripts/model_library.gd")
+const MED: String = "res://Assets/Environment/Medieval/"
+const HAL: String = "res://Assets/Environment/Halloween/"
+const DUN: String = "res://Assets/Environment/Dungeon/"
+const NPC = preload("res://scripts/npc.gd")
+const CHR: String = "res://Assets/Characters/"
 const VIS_RANGE: float = 420.0
 
 var data: RefCounted
@@ -30,6 +36,10 @@ func build(parent: Node3D, world_data: RefCounted) -> void:
 	_boss_lair()
 	_monster_zone()
 	_lake()
+	_village()
+	_models_extra()
+	_clouds()
+	_npcs()
 
 
 # ------------------------------------------------------------ outils
@@ -81,6 +91,18 @@ func _mat(key: String) -> StandardMaterial3D:
 			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			m.roughness = 0.1
 			m.metallic = 0.3
+		"floor_tiles":
+			m.albedo_color = Color(0.70, 0.68, 0.64)
+			m.albedo_texture = load("res://Assets/Textures/dalles_pierre.png") as Texture2D
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = true
+			m.uv1_scale = Vector3(0.22, 0.22, 0.22)
+	if key == "stone_light" or key == "stone_dark" or key == "stone_ruin":
+		# pierre texturée (texture générée, libre de droits), projetée en coordonnées monde
+		m.albedo_texture = load("res://Assets/Textures/pierre_brute.png") as Texture2D
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3(0.35, 0.35, 0.35)
 	if unshaded:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mats[key] = m
@@ -213,7 +235,7 @@ func yaw_x(dir: Vector2) -> float:
 func _arena() -> void:
 	_begin("Arene")
 	# sol en pierre (dessus à y = 0,1) et anneaux dorés
-	cyl("stone_light", 47.0, 47.0, 0.3, Vector3(0.0, -0.05, 0.0), 48, true)
+	cyl("floor_tiles", 47.0, 47.0, 0.3, Vector3(0.0, -0.05, 0.0), 48, true)
 	ring("gold", 12.0, 0.5, Vector3(0.0, 0.1, 0.0))
 	ring("gold", 30.0, 0.5, Vector3(0.0, 0.1, 0.0))
 	# éclair doré au centre
@@ -283,8 +305,6 @@ func _camp() -> void:
 	_begin("CampDeDepart")
 	var c: Vector2 = WorldData.CAMP
 	var gy: float = _g(c.x, c.y)
-	# tente (pyramide à 4 côtés)
-	cyl("cloth", 0.0, 2.4, 2.8, Vector3(c.x + 2.5, gy + 1.3, c.y + 2.0), 4, true)
 	# feu de camp : bûches croisées + flamme
 	var f: Vector2 = c + Vector2(-2.0, -1.0)
 	var fy: float = _g(f.x, f.y)
@@ -295,10 +315,21 @@ func _camp() -> void:
 	# bancs en rondins
 	box("wood", Vector3(2.2, 0.45, 0.5), Vector3(f.x, fy + 0.22, f.y + 2.2), 0.0, true)
 	box("wood", Vector3(0.5, 0.45, 2.2), Vector3(f.x - 2.2, fy + 0.22, f.y), 0.0, true)
-	# caisses
-	box("wood", Vector3(0.9, 0.9, 0.9), Vector3(c.x + 5.0, gy + 0.45, c.y - 1.0), 0.3, true)
-	box("wood", Vector3(0.7, 0.7, 0.7), Vector3(c.x + 5.2, gy + 1.25, c.y - 1.1), 0.9, true)
 	_end()
+	# modèles KayKit (CC0) : tente, tonneaux, caisses, râtelier, cible
+	var props: Array = [
+		["tent", Vector2(3.0, 2.5), 0.4, 5.5], ["barrel", Vector2(5.5, -1.0), 0.0, 5.0],
+		["barrel", Vector2(6.3, -0.2), 0.5, 5.0], ["crate_A_big", Vector2(5.0, 0.6), 0.3, 5.0],
+		["crate_B_small", Vector2(5.1, 0.6), 0.8, 5.0], ["weaponrack", Vector2(-4.5, 2.0), 1.2, 5.0],
+		["target", Vector2(-6.0, -4.0), 2.6, 5.0], ["resource_lumber", Vector2(0.0, 5.5), 0.2, 4.0],
+		["sack", Vector2(4.2, 4.0), 0.0, 5.0], ["flag_blue", Vector2(-2.0, 5.0), 0.0, 6.0],
+	]
+	for pr in props:
+		var o: Vector2 = pr[1]
+		var pp: Vector2 = c + o
+		var col: String = "box" if String(pr[0]) != "flag_blue" and String(pr[0]) != "sack" else ""
+		ModelLibrary.place(root, MED + "Props/" + String(pr[0]) + ".gltf",
+			Vector3(pp.x, _g(pp.x, pp.y) - 0.05, pp.y), float(pr[2]), float(pr[3]), col)
 
 
 # ------------------------------------------------------------ ruines
@@ -525,3 +556,168 @@ func _lake() -> void:
 			var off: Vector3 = Basis(Vector3.UP, yaw) * Vector3(1.0 * float(side), 0.0, t)
 			cyl("wood", 0.12, 0.12, 2.4, Vector3(pc.x + off.x, WorldData.WATER_LEVEL - 0.6, pc.y + off.z), 5, false)
 	_end()
+
+
+# ------------------------------------------------------------ modèles 3D CC0 (KayKit)
+
+## Village de Boma : maisons autour d'une place avec puits et marché.
+func _village() -> void:
+	var holder: Node3D = Node3D.new()
+	holder.name = "VillageDeBoma"
+	root.add_child(holder)
+	var c: Vector2 = WorldData.VILLAGE
+	var b: String = MED + "Buildings/"
+	var plan: Array = [
+		["building_well_blue", 0.0, 0.0, 6.0], ["building_market_blue", 0.0, -13.0, 6.0],
+		["building_tavern_blue", 18.0, -6.0, 6.0], ["building_home_A_blue", 16.0, 12.0, 6.5],
+		["building_home_B_blue", 3.0, 20.0, 6.0], ["building_home_A_blue", -13.0, 17.0, 6.5],
+		["building_blacksmith_blue", -19.0, 1.0, 6.0], ["building_home_B_blue", -15.0, -16.0, 6.0],
+		["building_church_blue", 4.0, -30.0, 6.5], ["building_windmill_blue", -32.0, -22.0, 7.0],
+		["building_tower_A_blue", 32.0, 22.0, 6.0], ["building_home_A_blue", 27.0, -22.0, 6.0],
+	]
+	for item in plan:
+		var px: float = c.x + float(item[1])
+		var pz: float = c.y + float(item[2])
+		# chaque bâtiment regarde vers la place
+		var yaw: float = atan2(c.x - px, c.y - pz) if (absf(float(item[1])) + absf(float(item[2]))) > 0.1 else 0.0
+		ModelLibrary.place(holder, b + String(item[0]) + ".gltf", Vector3(px, _g(px, pz) - 0.05, pz), yaw, float(item[3]), "box")
+	# clôtures en bois autour des jardins
+	for k in range(64):
+		var a: float = float(k) / 64.0 * TAU
+		if k % 16 == 8:
+			continue
+		var fp: Vector2 = c + Vector2(cos(a), sin(a)) * 40.0
+		ModelLibrary.place(holder, b + "fence_wood_straight.gltf", Vector3(fp.x, _g(fp.x, fp.y), fp.y), -a, 3.2, "box")
+	# accessoires de la place
+	var p: String = MED + "Props/"
+	var deco: Array = [["barrel", 4.0, -6.0], ["barrel", 5.0, -5.0], ["crate_A_big", -5.0, -7.0],
+		["crate_long_A", -6.0, 6.0], ["wheelbarrow", 7.0, 5.0], ["bucket_water", 2.5, 1.5], ["sack", -3.0, 8.0]]
+	for d in deco:
+		var dx: float = c.x + float(d[1])
+		var dz: float = c.y + float(d[2])
+		ModelLibrary.place(holder, p + String(d[0]) + ".gltf", Vector3(dx, _g(dx, dz) - 0.03, dz), float(d[1]), 5.0, "box")
+
+
+func _models_extra() -> void:
+	var holder: Node3D = Node3D.new()
+	holder.name = "DecorsModeles"
+	root.add_child(holder)
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = 31
+	# --- zone des monstres : cimetière avec crypte, portail, lanternes, cercueils
+	var m: Vector2 = WorldData.ZONES["monstres"]["center"]
+	ModelLibrary.place(holder, HAL + "crypt.gltf", Vector3(m.x, _g(m.x, m.y) - 0.1, m.y - 25.0), 0.0, 1.3, "box")
+	ModelLibrary.place(holder, HAL + "arch_gate.gltf", Vector3(m.x, _g(m.x, m.y + 40.0), m.y + 40.0), 0.0, 1.5, "")
+	for k in range(10):
+		var fx: float = m.x - 22.0 + float(k) * 4.4
+		if k == 4 or k == 5:
+			continue
+		var path: String = HAL + ("fence_broken.gltf" if k % 3 == 0 else "fence.gltf")
+		ModelLibrary.place(holder, path, Vector3(fx, _g(fx, m.y + 40.0), m.y + 40.0), 0.0, 1.0, "box")
+	for k in range(26):
+		var a: float = rng.randf() * TAU
+		var d: float = rng.randf_range(6.0, 38.0)
+		var gp: Vector2 = m + Vector2(cos(a), sin(a)) * d
+		var g: Array = ["gravestone", "grave_A", "grave_B", "gravemarker_A"]
+		ModelLibrary.place(holder, HAL + String(g[k % 4]) + ".gltf", Vector3(gp.x, _g(gp.x, gp.y) - 0.05, gp.y),
+			rng.randf_range(-0.3, 0.3), 1.0, "box")
+	for k in range(6):
+		var a: float = float(k) / 6.0 * TAU
+		var lp: Vector2 = m + Vector2(cos(a), sin(a)) * 30.0
+		ModelLibrary.place(holder, HAL + "post_lantern.gltf", Vector3(lp.x, _g(lp.x, lp.y), lp.y), -a, 1.0, "box")
+	ModelLibrary.place(holder, HAL + "coffin.gltf", Vector3(m.x + 8.0, _g(m.x + 8.0, m.y - 10.0), m.y - 10.0), 0.4, 1.0, "box")
+	ModelLibrary.place(holder, HAL + "shrine_candles.gltf", Vector3(m.x - 6.0, _g(m.x - 6.0, m.y - 14.0), m.y - 14.0), 0.0, 1.2, "box")
+	# --- repaire du boss : poteaux à crânes, piliers, autel à bougies
+	var bo: Vector2 = WorldData.ZONES["boss"]["center"]
+	for k in range(8):
+		var a: float = float(k) / 8.0 * TAU + 0.2
+		var sp: Vector2 = bo + Vector2(cos(a), sin(a)) * 22.0
+		ModelLibrary.place(holder, HAL + "post_skull.gltf", Vector3(sp.x, _g(sp.x, sp.y), sp.y), -a + PI * 0.5, 1.2, "box")
+	for k in range(4):
+		var a: float = float(k) / 4.0 * TAU + PI * 0.25
+		var pp: Vector2 = bo + Vector2(cos(a), sin(a)) * 13.0
+		ModelLibrary.place(holder, HAL + "pillar.gltf", Vector3(pp.x, _g(pp.x, pp.y), pp.y), a, 1.4, "box")
+	ModelLibrary.place(holder, HAL + "shrine_candles.gltf", Vector3(bo.x + 4.0, _g(bo.x, bo.y) + 0.1, bo.y), 0.0, 1.4, "box")
+	# --- ruines : éboulis, coffre au trésor, épée brisée, torches
+	var ru: Vector2 = WorldData.ZONES["ruines"]["center"]
+	for k in range(4):
+		var a: float = rng.randf() * TAU
+		var rp: Vector2 = ru + Vector2(cos(a), sin(a)) * rng.randf_range(30.0, 70.0)
+		ModelLibrary.place(holder, DUN + "rubble_large.glb", Vector3(rp.x, _g(rp.x, rp.y) - 0.2, rp.y), rng.randf() * TAU, 1.2, "box")
+	var top: float = _g(ru.x, ru.y) + 0.9
+	ModelLibrary.place(holder, DUN + "chest.glb", Vector3(ru.x, top, ru.y + 2.0), PI, 1.0, "box")
+	ModelLibrary.place(holder, DUN + "sword_shield_broken.glb", Vector3(ru.x - 3.0, top + 0.8, ru.y - 3.0), 0.6, 1.0, "")
+	for k in range(4):
+		var a: float = float(k) / 4.0 * TAU + PI * 0.25
+		var tp: Vector2 = ru + Vector2(cos(a), sin(a)) * 10.0
+		ModelLibrary.place(holder, DUN + "torch_lit.glb", Vector3(tp.x, top + 0.4, tp.y), 0.0, 1.5, "")
+	# --- arène : bannières sur les murs, torches aux portes
+	var step: float = TAU / 16.0
+	for i in range(16):
+		if i % 4 == 0 or i % 2 == 1:
+			continue
+		var ac: float = step * float(i)
+		var bp: Vector2 = Vector2(cos(ac), sin(ac)) * 48.2
+		ModelLibrary.place(holder, DUN + "banner_triple_red.glb", Vector3(bp.x, 0.1, bp.y), -(ac + PI * 0.5) + PI, 1.0, "")
+	for j in range(4):
+		var a: float = float(j) * PI * 0.5
+		for side in [-1.0, 1.0]:
+			var tp: Vector2 = Vector2(cos(a + float(side) * 0.13), sin(a + float(side) * 0.13)) * 46.0
+			ModelLibrary.place(holder, DUN + "torch_lit.glb", Vector3(tp.x, 0.5, tp.y), 0.0, 1.6, "")
+	# --- lac : nénuphars et plantes d'eau
+	var l: Vector2 = WorldData.LAKE_CENTER
+	for k in range(40):
+		var a: float = rng.randf() * TAU
+		var d: float = sqrt(rng.randf()) * WorldData.LAKE_RADIUS * 0.85
+		var wp: Vector2 = l + Vector2(cos(a), sin(a)) * d
+		var path: String = MED + "Nature/" + ("waterlily_A.gltf" if k % 3 != 0 else "waterlily_B.gltf")
+		if k % 5 == 0:
+			path = MED + "Nature/waterplant_A.gltf"
+		ModelLibrary.place(holder, path, Vector3(wp.x, WorldData.WATER_LEVEL + 0.03, wp.y), rng.randf() * TAU, 6.0, "", 150.0)
+
+
+## Nuages KayKit dans le ciel.
+func _clouds() -> void:
+	var holder: Node3D = Node3D.new()
+	holder.name = "Nuages"
+	root.add_child(holder)
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = 77
+	for k in range(26):
+		var x: float = rng.randf_range(-650.0, 650.0)
+		var z: float = rng.randf_range(-650.0, 650.0)
+		var path: String = MED + "Nature/" + ("cloud_big.gltf" if k % 2 == 0 else "cloud_small.gltf")
+		var cl: Node3D = ModelLibrary.place(holder, path, Vector3(x, rng.randf_range(120.0, 170.0), z),
+			rng.randf() * TAU, rng.randf_range(10.0, 18.0), "", 1000.0)
+		for ch in cl.get_children():
+			(ch as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Personnages animés CC0 (KayKit) : aventuriers au camp et au village, squelettes
+## (futurs ennemis) dans la zone des monstres.
+func _npc(path: String, anim: String, p: Vector2, yaw: float, scale: float = 1.3) -> void:
+	var n: Node3D = NPC.new()
+	n.set("model_path", path)
+	n.set("animation", anim)
+	n.name = path.get_file().get_basename()
+	n.position = Vector3(p.x, _g(p.x, p.y), p.y)
+	n.rotation.y = yaw
+	n.scale = Vector3(scale, scale, scale)
+	root.add_child(n)
+
+
+func _npcs() -> void:
+	var c: Vector2 = WorldData.CAMP
+	var f: Vector2 = c + Vector2(-2.0, -1.0)
+	_npc(CHR + "Adventurers/Rogue.glb", "Sit_Floor_Idle", f + Vector2(1.6, 1.2), PI + 0.9)
+	_npc(CHR + "Adventurers/Knight.glb", "Idle", c + Vector2(-5.5, 3.5), -0.6)
+	var v: Vector2 = WorldData.VILLAGE
+	_npc(CHR + "Adventurers/Barbarian.glb", "Cheer", v + Vector2(4.0, 4.0), PI * 0.8)
+	_npc(CHR + "Adventurers/Mage.glb", "Spellcasting", v + Vector2(-5.0, -3.0), 0.7)
+	_npc(CHR + "Adventurers/Knight.glb", "Idle", v + Vector2(10.0, -10.0), -2.3)
+	var m: Vector2 = WorldData.ZONES["monstres"]["center"]
+	_npc(CHR + "Skeletons/Skeleton_Warrior.glb", "Idle_Combat", m + Vector2(0.0, 30.0), 0.0)
+	_npc(CHR + "Skeletons/Skeleton_Minion.glb", "Idle", m + Vector2(-6.0, 26.0), 0.4)
+	_npc(CHR + "Skeletons/Skeleton_Rogue.glb", "Idle_B", m + Vector2(6.0, 25.0), -0.4)
+	_npc(CHR + "Skeletons/Skeleton_Mage.glb", "Spellcasting", m + Vector2(0.0, -18.0), 0.0)
+	_npc(CHR + "Skeletons/Skeleton_Minion.glb", "Skeletons_Inactive_Floor_Pose", m + Vector2(12.0, 5.0), 1.2)

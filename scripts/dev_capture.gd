@@ -24,7 +24,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	var spots: Dictionary = {
 		"arena": Vector2(0.0, 30.0), "forest": Vector2(300.0, -300.0), "ruins": Vector2(-40.0, -228.0),
 		"boss": Vector2(-385.0, -385.0), "volcano": Vector2(-300.0, 255.0), "monsters": Vector2(280.0, 300.0),
-		"lake": Vector2(130.0, 125.0), "rocks": Vector2(380.0, 50.0),
+		"lake": Vector2(130.0, 125.0), "rocks": Vector2(380.0, 50.0), "village": Vector2(-120.0, 205.0), "camp": Vector2(18.0, 92.0),
 	}
 	if spots.has(view):
 		var s: Vector2 = spots[view]
@@ -46,6 +46,10 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 			target = Vector2(170.0, 170.0)
 		elif view == "rocks":
 			target = Vector2(420.0, 60.0)
+		elif view == "village":
+			target = Vector2(-135.0, 150.0)
+		elif view == "camp":
+			target = Vector2(9.0, 78.0)
 		var d: Vector2 = target - s
 		cam.set("yaw", atan2(-d.x, -d.y))
 		cam.set("pitch", -0.12)

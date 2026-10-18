@@ -10,12 +10,15 @@ const LAKE_RADIUS: float = 55.0
 const WATER_LEVEL: float = -1.0
 const SPAWN: Vector2 = Vector2(0.0, 70.0)
 const CAMP: Vector2 = Vector2(9.0, 78.0)
+const VILLAGE: Vector2 = Vector2(-135.0, 150.0)
+const VILLAGE_RADIUS: float = 42.0
 
 ## Zones : centre (x, z) et rayon en mètres.
 const ZONES: Dictionary = {
 	"arene": {"name": "Arène", "center": Vector2(0.0, 0.0), "radius": 55.0},
 	"plaine": {"name": "Plaine de départ", "center": Vector2(0.0, 120.0), "radius": 240.0},
 	"lac": {"name": "Lac Miroir", "center": Vector2(170.0, 170.0), "radius": 75.0},
+	"village": {"name": "Village de Boma", "center": Vector2(-135.0, 150.0), "radius": 60.0},
 	"ruines": {"name": "Ruines anciennes", "center": Vector2(-60.0, -260.0), "radius": 120.0},
 	"rochers": {"name": "Zone rocheuse", "center": Vector2(420.0, 60.0), "radius": 130.0},
 	"foret": {"name": "Forêt fantastique", "center": Vector2(330.0, -330.0), "radius": 170.0},
@@ -29,6 +32,7 @@ const PATHS: Array = [
 	[Vector2(0.0, 48.0), Vector2(0.0, 140.0)],
 	[Vector2(0.0, 140.0), Vector2(280.0, 310.0)],
 	[Vector2(0.0, 140.0), Vector2(115.0, 150.0)],
+	[Vector2(0.0, 140.0), Vector2(-100.0, 150.0)],
 	[Vector2(0.0, -48.0), Vector2(-60.0, -250.0)],
 	[Vector2(-60.0, -250.0), Vector2(-395.0, -385.0)],
 	[Vector2(48.0, 0.0), Vector2(400.0, 55.0)],
@@ -71,6 +75,9 @@ func height_at(x: float, z: float) -> float:
 	hills *= 0.55 + 0.45 * smoothstep(2.0, 12.0, pd)
 	# arène : sol parfaitement plat
 	hills = lerpf(hills, 0.0, 1.0 - smoothstep(ARENA_RADIUS, ARENA_RADIUS + 40.0, r))
+	# village : terrain aplani pour les bâtiments
+	var vd0: float = Vector2(x, z).distance_to(VILLAGE)
+	hills = lerpf(hills, 0.3, 1.0 - smoothstep(VILLAGE_RADIUS, VILLAGE_RADIUS + 35.0, vd0))
 	# lac : cuvette peu profonde
 	var ld: float = Vector2(x, z).distance_to(LAKE_CENTER)
 	var lake: float = 1.0 - smoothstep(LAKE_RADIUS * 0.45, LAKE_RADIUS * 1.15, ld)
@@ -126,6 +133,8 @@ func is_reserved(x: float, z: float) -> bool:
 	if p.distance_to(ZONES["ruines"]["center"]) < 18.0:
 		return true
 	if p.distance_to(ZONES["foret"]["center"]) < 15.0:
+		return true
+	if p.distance_to(VILLAGE) < VILLAGE_RADIUS + 6.0:
 		return true
 	if p.distance_to(VOLCANO_CENTER) < 40.0:
 		return true

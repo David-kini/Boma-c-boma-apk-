@@ -11,6 +11,13 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Ressources 3D CC0 (v0.6)
+- Modèles KayKit (CC0) intégrés : arbres, rochers, nuages, village de Boma (maisons, taverne, moulin, puits, marché, forge, église, tour), camp (tente, tonneaux, caisses), cimetière (crypte, tombes, portail, lanternes), torches, bannières, coffre, nénuphars.
+- Personnages riggés et animés CC0 : aventuriers (PNJ) et squelettes (futurs ennemis) ; bibliothèques d'animations extraites dans `Assets/Animations`.
+- Textures de sol et de pierre stylisées (générées, libres) projetées en coordonnées monde.
+- Organisation : `Assets/Textures`, `Assets/Characters`, `Assets/Animations`, `Assets/Environment` (+ `Licenses`, `Reference`). Détails et sources : `Assets/README_ASSETS.md`.
+- Sauvegarde avant modification : tag git `sauvegarde-avant-assets`.
+
 ## Visage 3D et éclairage (v0.5)
 - Tête entièrement modélisée (hero_head.gd), plus de photo collée : crâne chauve, teint albinos, nez large, lèvres pleines, sourire, joues, oreilles, yeux en amande (iris, pupille, reflet, cils), sourcils clairs, narines, lunettes sans monture (verres teintés, barre et branches dorées).
 - Normales calculées exactement (tête et corps) ; ombres du soleil en 2 zones avec filtrage doux ; ombre douce sous les pieds à toutes les qualités ; lumière ambiante fixe et lumière d'appoint chaude ; pas de reflets du ciel (taches sur mobile, coûteux).

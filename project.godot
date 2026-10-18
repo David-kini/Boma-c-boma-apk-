@@ -8,7 +8,7 @@ config/description="RPG d'action 3D solo hors ligne (Godot 4.3+)."
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 run/max_fps=60
-config/icon="res://assets/textures/face.png"
+config/icon="res://Assets/Textures/face_photo_reference.png"
 
 [autoload]
 

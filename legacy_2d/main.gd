@@ -116,12 +116,12 @@ var palm_lines: Array = []
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
-	if ResourceLoader.exists("res://assets/textures/face.png"):
-		face_tex = load("res://assets/textures/face.png")
-	if ResourceLoader.exists("res://assets/textures/arena.jpg"):
-		arena_tex = load("res://assets/textures/arena.jpg")
-	elif ResourceLoader.exists("res://assets/textures/arena.png"):
-		arena_tex = load("res://assets/textures/arena.png")
+	if ResourceLoader.exists("res://Assets/Textures/face_photo_reference.png"):
+		face_tex = load("res://Assets/Textures/face_photo_reference.png")
+	if ResourceLoader.exists("res://Assets/Textures/arena.jpg"):
+		arena_tex = load("res://Assets/Textures/arena.jpg")
+	elif ResourceLoader.exists("res://Assets/Textures/arena.png"):
+		arena_tex = load("res://Assets/Textures/arena.png")
 	DisplayServer.screen_set_keep_on(true)
 	build_bg()
 	hero = new_hero()

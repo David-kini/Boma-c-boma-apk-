@@ -27,6 +27,12 @@ func setup(world_data: RefCounted) -> void:
 	material.vertex_color_use_as_albedo = true
 	material.roughness = 1.0
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# texture de détail (herbe/terre, générée et libre de droits) projetée en coordonnées
+	# monde, multipliée par les couleurs de zone du terrain
+	material.albedo_texture = load("res://Assets/Textures/sol_detail.png") as Texture2D
+	material.uv1_triplanar = true
+	material.uv1_world_triplanar = true
+	material.uv1_scale = Vector3(0.18, 0.18, 0.18)
 	max_index = int(ceil(WorldData.HALF / CHUNK))
 	view_chunks = GameSettings.view_chunks()
 	GameSettings.quality_changed.connect(_on_quality_changed)
