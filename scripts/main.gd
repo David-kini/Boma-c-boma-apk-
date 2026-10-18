@@ -31,3 +31,18 @@ func _ready() -> void:
 	hud = HUD_SCENE.instantiate() as CanvasLayer
 	add_child(hud)
 	hud.call("setup", player, world)
+	_dev_capture()
+
+
+## Outil de développement : seulement si le jeu est lancé avec --capture=...
+func _dev_capture() -> void:
+	var args: Dictionary = {}
+	for a in OS.get_cmdline_user_args():
+		var s: String = a.trim_prefix("--")
+		var kv: PackedStringArray = s.split("=", true, 1)
+		args[kv[0]] = kv[1] if kv.size() > 1 else ""
+	if not args.has("capture"):
+		return
+	var cap: Node = load("res://scripts/dev_capture.gd").new()
+	add_child(cap)
+	cap.call("setup", player, camera_rig, args)

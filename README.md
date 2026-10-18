@@ -11,6 +11,13 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Héros et caméra (v0.4)
+- Héros d'après le concept art : tête chauve avec le visage de la photo (texture recadrée, bords fondus), branches de lunettes dorées, chemise blanche, nœud papillon, gilet sombre à bordure et boutons dorés, long manteau noir à bordures et ourlet dorés, épaulières et brassards dorés, gants noirs, ceinture et boucle, pantalon, bottes à liseré doré.
+- Corps en maillages skinnés (déformés par le Skeleton3D de 18 os) ; os du manteau animé (il vole en course, en saut et en chute).
+- Épée d'éclair (sword.gd) : lame dentelée lumineuse, halo additif, garde dorée en ailes, gemme, éclairs animés ; variantes feu et divin prêtes.
+- Caméra : suivi fluide, recentrage automatique derrière le héros, zoom à la molette, collision, secousse.
+- Outil de test : `godot -- --capture=img.png --view=front|back|side|hero|forest|... --quality=0..3 --anim=run` (capture d'écran automatique, inactif en jeu normal).
+
 ## Environnement (v0.3)
 - Arène : sol en pierre, anneaux et éclair dorés, 16 piliers, murs, gradins, 4 portes avec linteau, bannières, braseros et panneaux indicateurs.
 - Camp de départ (tente, feu, bancs, caisses) ; chemins de terre entre les zones.

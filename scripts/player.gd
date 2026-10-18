@@ -3,6 +3,7 @@ extends CharacterBody3D
 ## après une chute. Déplacement relatif à la caméra. Origine = pieds.
 
 const PlayerRig = preload("res://scripts/player_rig.gd")
+const Sword = preload("res://scripts/sword.gd")
 
 const WALK_SPEED: float = 2.4
 const RUN_SPEED: float = 6.2
@@ -21,6 +22,7 @@ var rig: Node3D
 var state: String = "idle"
 var hspeed: float = 0.0
 var invulnerable: bool = false
+var debug_anim: String = ""             # outil de capture uniquement
 
 var _coyote: float = 0.0
 var _dodge_t: float = 0.0
@@ -29,7 +31,7 @@ var _dodge_dir: Vector3 = Vector3.ZERO
 var _land_t: float = 0.0
 var _fall_speed: float = 0.0
 var _was_on_floor: bool = true
-var _face_yaw: float = 0.0
+var face_yaw: float = 0.0
 
 
 func _ready() -> void:
@@ -47,6 +49,9 @@ func _ready() -> void:
 	rig = PlayerRig.new()
 	rig.name = "Rig"
 	add_child(rig)
+	var sword: Node3D = Sword.new()
+	sword.name = "EpeeEclair"
+	rig.call("equip_weapon", sword)
 
 
 func _physics_process(delta: float) -> void:
@@ -74,7 +79,7 @@ func _physics_process(delta: float) -> void:
 	var wish: Vector3 = Basis(Vector3.UP, yaw) * Vector3(mv.x, 0.0, mv.y)
 	wish.y = 0.0
 	var has_input: bool = wish.length() > 0.1
-	var facing: Vector3 = Vector3(-sin(_face_yaw), 0.0, -cos(_face_yaw))
+	var facing: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
 
 	# esquive
 	if GameInput.dodge_buffer > 0.0 and _dodge_cd <= 0.0 and _dodge_t <= 0.0 \
@@ -125,9 +130,9 @@ func _physics_process(delta: float) -> void:
 		state = "idle"
 
 	if _dodge_t > 0.0:
-		_face_yaw = atan2(-_dodge_dir.x, -_dodge_dir.z)
+		face_yaw = atan2(-_dodge_dir.x, -_dodge_dir.z)
 	elif hspeed > 0.5:
-		_face_yaw = atan2(-velocity.x, -velocity.z)
+		face_yaw = atan2(-velocity.x, -velocity.z)
 
 	# sécurité : si le joueur passe sous le terrain, on le remet en surface
 	if world != null:
@@ -138,5 +143,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	rig.rotation.y = lerp_angle(rig.rotation.y, _face_yaw, 1.0 - exp(-14.0 * delta))
+	rig.rotation.y = lerp_angle(rig.rotation.y, face_yaw, 1.0 - exp(-14.0 * delta))
+	if debug_anim != "":
+		rig.call("animate", delta, debug_anim, 6.2 if debug_anim == "run" else 2.4)
+		return
 	rig.call("animate", delta, state, hspeed)

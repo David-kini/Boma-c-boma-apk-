@@ -1,18 +1,27 @@
 extends Node3D
-## Personnage 3D procédural : Skeleton3D (16 os) + pièces de corps attachées aux os
-## (BoneAttachment3D). Le visage (photo) est projeté sur une tête ellipsoïdale 3D.
-## La tête est dans un conteneur "head_slot" : on pourra la remplacer par un vrai
-## modèle 3D (replace_head) sans toucher au reste.
-## Le personnage regarde vers -Z (avant de Godot), ses pieds sont à y = 0.
+## Héros 3D (référence : concept art "héros à l'épée d'éclair").
+## - Skeleton3D de 18 os, animé procéduralement (idle, marche, course, saut, chute,
+##   esquive, réception) + os "coat" pour le mouvement du manteau.
+## - Corps en MAILLAGES SKINNÉS (déformés par le squelette) : jambes/pantalon/bottes,
+##   torse/chemise/ceinture, gilet ouvert, long manteau ouvert à bordures dorées, bras.
+## - Pièces rigides attachées aux os : tête (visage photo projeté), lunettes dorées,
+##   oreilles, col, nœud papillon, boutons, boucle, épaulières, brassards, gants, chaussures.
+## - La tête est dans "head_slot" : remplaçable par un vrai modèle (replace_head).
+## Le personnage regarde vers -Z, pieds à y = 0, taille ≈ 1,79 m.
 
 const FACE_PATH: String = "res://assets/textures/face.png"
-const SKIN: Color = Color(0.95, 0.88, 0.84)
-const HAIR: Color = Color(0.93, 0.93, 0.91)
-const SHIRT: Color = Color(0.96, 0.96, 0.97)
-const VEST: Color = Color(0.22, 0.22, 0.24)
-const BLACK: Color = Color(0.06, 0.06, 0.07)
+const SKIN: Color = Color(0.933, 0.604, 0.522)   # teinte mesurée sur la photo
+const SHIRT: Color = Color(0.95, 0.95, 0.96)
+const VEST: Color = Color(0.13, 0.11, 0.10)
+const COAT: Color = Color(0.07, 0.065, 0.075)
+const PANTS: Color = Color(0.14, 0.14, 0.16)
+const BOOT: Color = Color(0.05, 0.045, 0.05)
+const BELT: Color = Color(0.36, 0.22, 0.12)
+const GOLD: Color = Color(0.93, 0.70, 0.26)
+const BLACK: Color = Color(0.04, 0.04, 0.05)
 const HIPS_REST: Vector3 = Vector3(0.0, 0.95, 0.0)
-const HEAD_RADII: Vector3 = Vector3(0.10, 0.115, 0.11)
+const HEAD_RADII: Vector3 = Vector3(0.112, 0.134, 0.122)
+const HEAD_CENTER_Y: float = 0.115
 
 ## [nom, parent, position locale de repos]
 const BONE_DEF: Array = [
@@ -33,34 +42,37 @@ const BONE_DEF: Array = [
 	["thigh_r", "hips", Vector3(0.09, -0.02, 0.0)],
 	["shin_r", "thigh_r", Vector3(0.0, -0.43, 0.0)],
 	["foot_r", "shin_r", Vector3(0.0, -0.43, 0.0)],
+	["coat", "hips", Vector3(0.0, -0.05, 0.0)],
 ]
 
-## Os animés par rotation (les autres restent en pose de repos).
 const POSED: Array = [
 	"spine", "chest", "neck", "head", "arm_l", "fore_l", "arm_r", "fore_r",
-	"thigh_l", "shin_l", "thigh_r", "shin_r",
+	"hand_r", "thigh_l", "shin_l", "thigh_r", "shin_r", "coat",
 ]
 
 var skeleton: Skeleton3D
 var head_slot: Node3D
 var bone_idx: Dictionary = {}
+var rest_global: Dictionary = {}
 var attachments: Dictionary = {}
 var materials: Dictionary = {}
 var current: Dictionary = {}
 var hips_y: float = 0.0
 var phase: float = 0.0
 var t: float = 0.0
+var weapon: Node3D = null
 
 
 func _ready() -> void:
 	for b in POSED:
 		current[b] = Vector3.ZERO
 	_build_skeleton()
-	_build_body()
+	_build_skinned_body()
+	_build_rigid_parts()
 	_build_head()
 
 
-# ---------------------------------------------------------------- squelette
+# ================================================================ squelette
 
 func _build_skeleton() -> void:
 	skeleton = Skeleton3D.new()
@@ -69,11 +81,14 @@ func _build_skeleton() -> void:
 	for def in BONE_DEF:
 		var bname: String = def[0]
 		var parent_name: String = def[1]
+		var rest_pos: Vector3 = def[2]
 		var idx: int = skeleton.add_bone(bname)
 		bone_idx[bname] = idx
+		var pg: Vector3 = Vector3.ZERO
 		if parent_name != "":
 			skeleton.set_bone_parent(idx, int(bone_idx[parent_name]))
-		var rest_pos: Vector3 = def[2]
+			pg = rest_global[parent_name]
+		rest_global[bname] = pg + rest_pos
 		skeleton.set_bone_rest(idx, Transform3D(Basis.IDENTITY, rest_pos))
 	skeleton.reset_bone_poses()
 
@@ -89,75 +104,381 @@ func _attach(bone: String) -> BoneAttachment3D:
 	return a
 
 
-## Point d'accroche pour les armes (phase 3) : "hand_r" ou "hand_l".
+## Point d'accroche pour les armes : "hand_r" ou "hand_l".
 func get_hand_mount(bone: String) -> Node3D:
 	return _attach(bone)
 
 
-func _mat(c: Color) -> StandardMaterial3D:
-	var key: String = c.to_html()
+## Équipe une arme dans la main droite (lame vers l'avant et le bas).
+func equip_weapon(w: Node3D) -> void:
+	if weapon != null:
+		weapon.queue_free()
+	weapon = w
+	var mount: Node3D = _attach("hand_r")
+	mount.add_child(w)
+	w.transform = Transform3D(Basis(Vector3.RIGHT, -1.93), Vector3(0.0, -0.06, -0.01))
+
+
+# ================================================================ matériaux
+
+func _mat(key: String) -> StandardMaterial3D:
 	if materials.has(key):
 		return materials[key] as StandardMaterial3D
 	var m: StandardMaterial3D = StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 0.85
+	match key:
+		"body":
+			m.vertex_color_use_as_albedo = true
+			m.roughness = 0.8
+		"coat":
+			m.vertex_color_use_as_albedo = true
+			m.roughness = 0.55
+			m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		"gold":
+			m.albedo_color = GOLD
+			m.metallic = 0.45
+			m.roughness = 0.3
+			m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		"lens":
+			m.albedo_color = Color(0.80, 0.45, 0.80, 0.45)
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.roughness = 0.1
+			m.metallic = 0.4
+		"skin":
+			m.albedo_color = SKIN
+			m.roughness = 0.7
+		_:
+			m.albedo_color = Color(key)
+			m.roughness = 0.8
 	materials[key] = m
 	return m
 
 
-func _put(bone: String, mesh: Mesh, offset: Vector3, c: Color) -> void:
+# ================================================================ maillages skinnés
+
+## Anneau de section : y, demi-largeur rx, demi-profondeur rz, os a -> b (poids w vers b),
+## couleur, et options : "open" (ouverture avant en radians), "cx", "cz", "leg", "coat".
+func R(y: float, rx: float, rz: float, a: String, b: String, w: float, col: Color,
+		opts: Dictionary = {}) -> Dictionary:
+	var d: Dictionary = {"y": y, "rx": rx, "rz": rz, "a": a, "b": b, "w": w, "col": col}
+	d.merge(opts)
+	return d
+
+
+## Construit un tube (ou une coque ouverte à l'avant) le long des anneaux, de haut en bas.
+## segs : nombre de divisions. edge : largeur (0..1) de la bordure colorée edge_col
+## sur les bords de l'ouverture. side : -1 jambe/bras gauche, +1 droit (pour l'os "leg").
+func _loft(rings: Array, segs: int, cap_top: bool, cap_bottom: bool, edge: float = 0.0,
+		edge_col: Color = GOLD) -> ArrayMesh:
+	var st: SurfaceTool = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var us: Array = []
+	for j in range(segs + 1):
+		us.append(float(j) / float(segs))
+	if edge > 0.0:
+		# colonnes supplémentaires pour des bordures nettes
+		us.append_array([edge * 0.98, edge, edge * 1.02, 1.0 - edge * 1.02, 1.0 - edge, 1.0 - edge * 0.98])
+		us.sort()
+	var cols: int = us.size()
+	var vcount: int = 0
+	for ring in rings:
+		var open: float = float(ring.get("open", 0.0))
+		var a0: float = -PI * 0.5 + open
+		var a1: float = -PI * 0.5 + TAU - open
+		var cx: float = float(ring.get("cx", 0.0))
+		var cz: float = float(ring.get("cz", 0.0))
+		for u in us:
+			var th: float = lerpf(a0, a1, float(u))
+			var x: float = cx + float(ring["rx"]) * cos(th)
+			var z: float = cz + float(ring["rz"]) * sin(th)
+			var col: Color = ring["col"]
+			if edge > 0.0 and (float(u) <= edge or float(u) >= 1.0 - edge):
+				col = edge_col
+			st.set_color(col)
+			_set_skin(st, ring, x, z)
+			st.add_vertex(Vector3(x, float(ring["y"]), z))
+			vcount += 1
+	for i in range(rings.size() - 1):
+		for j in range(cols - 1):
+			var a: int = i * cols + j
+			var b: int = a + 1
+			var c: int = a + cols
+			var d: int = c + 1
+			for idx in [a, c, b, b, c, d]:
+				st.add_index(idx)
+	if cap_top:
+		var r0: Dictionary = rings[0]
+		st.set_color(r0["col"])
+		_set_skin(st, r0, float(r0.get("cx", 0.0)), float(r0.get("cz", 0.0)))
+		st.add_vertex(Vector3(float(r0.get("cx", 0.0)), float(r0["y"]), float(r0.get("cz", 0.0))))
+		var ci: int = vcount
+		vcount += 1
+		for j in range(cols - 1):
+			for idx in [ci, j, j + 1]:
+				st.add_index(idx)
+	if cap_bottom:
+		var rl: Dictionary = rings[rings.size() - 1]
+		st.set_color(rl["col"])
+		_set_skin(st, rl, float(rl.get("cx", 0.0)), float(rl.get("cz", 0.0)))
+		st.add_vertex(Vector3(float(rl.get("cx", 0.0)), float(rl["y"]), float(rl.get("cz", 0.0))))
+		var cb: int = vcount
+		var base: int = (rings.size() - 1) * cols
+		for j in range(cols - 1):
+			for idx in [cb, base + j + 1, base + j]:
+				st.add_index(idx)
+	st.generate_normals()
+	return st.commit()
+
+
+func _set_skin(st: SurfaceTool, ring: Dictionary, x: float, z: float) -> void:
+	var weights: Dictionary = {}
+	var w: float = float(ring["w"])
+	var a: String = ring["a"]
+	var b: String = ring["b"]
+	weights[a] = 1.0 - w
+	if b != "" and w > 0.0:
+		weights[b] = float(weights.get(b, 0.0)) + w
+	# manteau : les pans suivent un peu les cuisses et l'os "coat" (dos)
+	var leg: float = float(ring.get("leg", 0.0))
+	var coat: float = float(ring.get("coat", 0.0))
+	var rx: float = float(ring["rx"])
+	var rz: float = float(ring["rz"])
+	var extra: Dictionary = {}
+	if leg > 0.0:
+		var side_w: float = leg * clampf(absf(x) / rx, 0.0, 1.0)
+		extra["thigh_l" if x < 0.0 else "thigh_r"] = side_w
+	if coat > 0.0:
+		extra["coat"] = coat * clampf(z / rz, 0.0, 1.0)
+	var total_extra: float = 0.0
+	for k in extra:
+		total_extra += float(extra[k])
+	if total_extra > 0.95:
+		for k in extra:
+			extra[k] = float(extra[k]) * 0.95 / total_extra
+		total_extra = 0.95
+	for k in weights:
+		weights[k] = float(weights[k]) * (1.0 - total_extra)
+	for k in extra:
+		weights[k] = float(weights.get(k, 0.0)) + float(extra[k])
+	var bones: PackedInt32Array = PackedInt32Array()
+	var ws: PackedFloat32Array = PackedFloat32Array()
+	for k in weights:
+		if bones.size() < 4:
+			bones.append(int(bone_idx[k]))
+			ws.append(float(weights[k]))
+	while bones.size() < 4:
+		bones.append(0)
+		ws.append(0.0)
+	st.set_bones(bones)
+	st.set_weights(ws)
+
+
+func _skinned(mesh: ArrayMesh, mat: String, node_name: String) -> void:
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.name = node_name
+	mi.mesh = mesh
+	mi.material_override = _mat(mat)
+	skeleton.add_child(mi)
+	mi.skin = skeleton.create_skin_from_rest_transforms()
+
+
+func _build_skinned_body() -> void:
+	# ---- jambes (pantalon + bottes)
+	for side in [-1.0, 1.0]:
+		var s: String = "l" if side < 0.0 else "r"
+		var x: float = 0.09 * float(side)
+		var th: String = "thigh_" + s
+		var sh: String = "shin_" + s
+		var ft: String = "foot_" + s
+		var o: Dictionary = {"cx": x}
+		var legs: Array = [
+			R(0.99, 0.100, 0.105, "hips", th, 0.2, PANTS, o),
+			R(0.90, 0.096, 0.100, "hips", th, 0.8, PANTS, o),
+			R(0.74, 0.082, 0.086, th, "", 0.0, PANTS, o),
+			R(0.56, 0.068, 0.072, th, sh, 0.35, PANTS, o),
+			R(0.48, 0.064, 0.068, th, sh, 0.85, PANTS, o),
+			R(0.39, 0.061, 0.064, sh, "", 0.0, PANTS, o),
+			R(0.39, 0.068, 0.072, sh, "", 0.0, BOOT, o),
+			R(0.30, 0.064, 0.068, sh, "", 0.0, BOOT, o),
+			R(0.20, 0.057, 0.062, sh, "", 0.0, BOOT, o),
+			R(0.12, 0.055, 0.060, sh, ft, 0.5, BOOT, o),
+			R(0.07, 0.056, 0.062, ft, "", 0.0, BOOT, o),
+		]
+		_skinned(_loft(legs, 14, false, true), "body", "Jambe_" + s)
+	# ---- torse : chemise, ceinture, bassin
+	var torso: Array = [
+		R(1.535, 0.072, 0.068, "chest", "neck", 0.6, SHIRT),
+		R(1.50, 0.150, 0.095, "chest", "", 0.0, SHIRT),
+		R(1.44, 0.200, 0.112, "chest", "", 0.0, SHIRT),
+		R(1.32, 0.190, 0.116, "chest", "", 0.0, SHIRT),
+		R(1.20, 0.170, 0.110, "spine", "chest", 0.5, SHIRT),
+		R(1.08, 0.155, 0.100, "spine", "", 0.0, SHIRT),
+		R(1.045, 0.158, 0.102, "hips", "spine", 0.6, SHIRT),
+		R(1.045, 0.163, 0.107, "hips", "spine", 0.6, BELT),
+		R(0.99, 0.166, 0.109, "hips", "spine", 0.2, BELT),
+		R(0.99, 0.166, 0.109, "hips", "", 0.0, PANTS),
+		R(0.92, 0.170, 0.110, "hips", "", 0.0, PANTS),
+		R(0.85, 0.150, 0.100, "hips", "", 0.0, PANTS),
+	]
+	_skinned(_loft(torso, 24, true, true), "body", "Torse")
+	# ---- gilet ouvert en V, bordure dorée
+	var vest: Array = [
+		R(1.505, 0.152, 0.098, "chest", "neck", 0.2, VEST, {"open": 0.62}),
+		R(1.47, 0.186, 0.108, "chest", "", 0.0, VEST, {"open": 0.52}),
+		R(1.40, 0.206, 0.119, "chest", "", 0.0, VEST, {"open": 0.40}),
+		R(1.30, 0.197, 0.123, "chest", "", 0.0, VEST, {"open": 0.20}),
+		R(1.20, 0.178, 0.117, "spine", "chest", 0.5, VEST, {"open": 0.12}),
+		R(1.10, 0.164, 0.108, "spine", "", 0.0, VEST, {"open": 0.12}),
+		R(1.035, 0.168, 0.111, "hips", "spine", 0.6, VEST, {"open": 0.30}),
+	]
+	_skinned(_loft(vest, 26, false, false, 0.025), "coat", "Gilet")
+	# ---- long manteau ouvert, bordures et ourlet dorés, pans qui suivent les jambes
+	var coat: Array = [
+		R(1.545, 0.100, 0.092, "chest", "neck", 0.3, COAT, {"open": 1.25}),
+		R(1.495, 0.192, 0.118, "chest", "", 0.0, COAT, {"open": 0.88}),
+		R(1.445, 0.228, 0.132, "chest", "", 0.0, COAT, {"open": 0.82}),
+		R(1.32, 0.212, 0.132, "chest", "", 0.0, COAT, {"open": 0.80}),
+		R(1.20, 0.192, 0.126, "spine", "chest", 0.5, COAT, {"open": 0.72}),
+		R(1.08, 0.178, 0.118, "spine", "", 0.0, COAT, {"open": 0.66}),
+		R(0.98, 0.186, 0.122, "hips", "spine", 0.2, COAT, {"open": 0.60}),
+		R(0.85, 0.212, 0.150, "hips", "", 0.0, COAT, {"open": 0.55, "leg": 0.15, "coat": 0.10}),
+		R(0.70, 0.245, 0.180, "hips", "", 0.0, COAT, {"open": 0.50, "leg": 0.30, "coat": 0.35}),
+		R(0.55, 0.278, 0.210, "hips", "", 0.0, COAT, {"open": 0.46, "leg": 0.40, "coat": 0.60}),
+		R(0.43, 0.298, 0.228, "hips", "", 0.0, COAT, {"open": 0.43, "leg": 0.45, "coat": 0.75}),
+		R(0.43, 0.299, 0.229, "hips", "", 0.0, GOLD, {"open": 0.43, "leg": 0.45, "coat": 0.75}),
+		R(0.37, 0.306, 0.234, "hips", "", 0.0, GOLD, {"open": 0.42, "leg": 0.47, "coat": 0.80}),
+	]
+	_skinned(_loft(coat, 30, false, false, 0.022), "coat", "Manteau")
+	# ---- bras (chemise blanche)
+	for side in [-1.0, 1.0]:
+		var s: String = "l" if side < 0.0 else "r"
+		var x: float = 0.23 * float(side)
+		var ar: String = "arm_" + s
+		var fo: String = "fore_" + s
+		var o: Dictionary = {"cx": x}
+		var arm: Array = [
+			R(1.47, 0.060, 0.060, "chest", ar, 0.5, SHIRT, o),
+			R(1.40, 0.062, 0.064, ar, "", 0.0, SHIRT, o),
+			R(1.27, 0.056, 0.058, ar, "", 0.0, SHIRT, o),
+			R(1.16, 0.050, 0.052, ar, fo, 0.5, SHIRT, o),
+			R(1.10, 0.048, 0.050, fo, "", 0.0, SHIRT, o),
+			R(0.98, 0.043, 0.045, fo, "", 0.0, SHIRT, o),
+			R(0.89, 0.036, 0.038, fo, "hand_" + s, 0.3, SHIRT, o),
+		]
+		_skinned(_loft(arm, 12, true, true), "body", "Bras_" + s)
+	# ---- cou
+	var neck: Array = [
+		R(1.63, 0.048, 0.050, "head", "", 0.0, SKIN),
+		R(1.56, 0.054, 0.056, "neck", "head", 0.3, SKIN),
+		R(1.50, 0.060, 0.060, "neck", "chest", 0.4, SKIN),
+	]
+	_skinned(_loft(neck, 12, false, false), "body", "Cou")
+
+
+# ================================================================ pièces rigides
+
+func _put(bone: String, mesh: Mesh, xf: Transform3D, mat: String) -> MeshInstance3D:
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.mesh = mesh
-	mi.position = offset
-	mi.material_override = _mat(c)
+	mi.transform = xf
+	mi.material_override = _mat(mat)
 	_attach(bone).add_child(mi)
+	return mi
 
 
-func _box(bone: String, size: Vector3, offset: Vector3, c: Color) -> void:
-	var bm: BoxMesh = BoxMesh.new()
-	bm.size = size
-	_put(bone, bm, offset, c)
+## Position relative à l'os à partir d'une position "globale" de repos.
+func _rel(bone: String, p: Vector3) -> Vector3:
+	return p - (rest_global[bone] as Vector3)
 
 
-func _capsule(bone: String, radius: float, height: float, offset: Vector3, c: Color) -> void:
-	var cm: CapsuleMesh = CapsuleMesh.new()
-	cm.radius = radius
-	cm.height = height
-	cm.radial_segments = 10
-	cm.rings = 4
-	_put(bone, cm, offset, c)
+func _sphere(r: float, seg: int = 10, rings: int = 6, hemi: bool = false) -> SphereMesh:
+	var m: SphereMesh = SphereMesh.new()
+	m.radius = r
+	m.height = r if hemi else r * 2.0
+	m.radial_segments = seg
+	m.rings = rings
+	m.is_hemisphere = hemi
+	return m
 
 
-# ------------------------------------------------------------------- corps
-
-func _build_body() -> void:
-	_box("hips", Vector3(0.34, 0.20, 0.20), Vector3(0.0, -0.02, 0.0), BLACK)
-	_box("spine", Vector3(0.32, 0.22, 0.19), Vector3(0.0, 0.10, 0.0), SHIRT)
-	_box("chest", Vector3(0.38, 0.30, 0.21), Vector3(0.0, 0.12, 0.0), SHIRT)
-	for k in range(2):
-		var sx: float = -1.0 + 2.0 * float(k)
-		# gilet gris foncé : deux panneaux, la chemise reste visible au centre
-		_box("spine", Vector3(0.12, 0.21, 0.195), Vector3(sx * 0.10, 0.10, 0.0), VEST)
-		_box("chest", Vector3(0.14, 0.29, 0.215), Vector3(sx * 0.12, 0.12, 0.0), VEST)
-		# ailes du nœud papillon
-		_box("chest", Vector3(0.05, 0.04, 0.02), Vector3(sx * 0.04, 0.26, -0.11), BLACK)
-	_box("chest", Vector3(0.03, 0.035, 0.025), Vector3(0.0, 0.26, -0.11), BLACK)
-	_capsule("neck", 0.045, 0.12, Vector3(0.0, 0.03, 0.0), SKIN)
-	for side in ["l", "r"]:
-		_capsule("thigh_" + side, 0.075, 0.46, Vector3(0.0, -0.215, 0.0), BLACK)
-		_capsule("shin_" + side, 0.06, 0.46, Vector3(0.0, -0.215, 0.0), BLACK)
-		_box("foot_" + side, Vector3(0.12, 0.07, 0.27), Vector3(0.0, -0.035, -0.05), BLACK)
-		_capsule("arm_" + side, 0.05, 0.32, Vector3(0.0, -0.15, 0.0), SHIRT)
-		_capsule("fore_" + side, 0.045, 0.30, Vector3(0.0, -0.14, 0.0), SHIRT)
-		_box("hand_" + side, Vector3(0.08, 0.10, 0.05), Vector3(0.0, -0.05, 0.0), SKIN)
+func _cyl(rt: float, rb: float, h: float, seg: int = 10) -> CylinderMesh:
+	var m: CylinderMesh = CylinderMesh.new()
+	m.top_radius = rt
+	m.bottom_radius = rb
+	m.height = h
+	m.radial_segments = seg
+	m.rings = 1
+	return m
 
 
-# ------------------------------------------------------------------- tête
+func _boxm(size: Vector3) -> BoxMesh:
+	var m: BoxMesh = BoxMesh.new()
+	m.size = size
+	return m
+
+
+func _xf(basis: Basis, pos: Vector3) -> Transform3D:
+	return Transform3D(basis, pos)
+
+
+func _build_rigid_parts() -> void:
+	var I: Basis = Basis.IDENTITY
+	# col de chemise et nœud papillon
+	_put("neck", _cyl(0.062, 0.068, 0.05, 12), _xf(I, _rel("neck", Vector3(0.0, 1.515, 0.0))), "#f2f2f4")
+	var bow_y: float = 1.505
+	var bow_z: float = -0.082
+	_put("chest", _boxm(Vector3(0.026, 0.024, 0.02)), _xf(I, _rel("chest", Vector3(0.0, bow_y, bow_z))), "#0a0a0c")
+	for side in [-1.0, 1.0]:
+		var wing: Basis = Basis(Vector3(0.0, 0.0, 1.0), -PI * 0.5 * float(side))
+		_put("chest", _cyl(0.0, 0.026, 0.055, 4), _xf(wing, _rel("chest", Vector3(0.033 * float(side), bow_y, bow_z))), "#0a0a0c")
+	# boutons dorés du gilet
+	for k in range(3):
+		var y: float = 1.13 + 0.06 * float(k)
+		var bone: String = "spine" if y < 1.2 else "chest"
+		_put(bone, _sphere(0.009, 6, 4), _xf(I, _rel(bone, Vector3(0.0, y, -0.124 + 0.004 * float(k)))), "gold")
+	# boucle de ceinture
+	_put("hips", _boxm(Vector3(0.055, 0.042, 0.014)), _xf(I, _rel("hips", Vector3(0.0, 1.018, -0.112))), "gold")
+	# épaulières dorées en plaques superposées (la gauche plus grande)
+	for side in [-1.0, 1.0]:
+		var s: String = "l" if side < 0.0 else "r"
+		var k: float = 0.85 if side < 0.0 else 0.75
+		var arm: String = "arm_" + s
+		var sx: float = float(side)
+		_put(arm, _sphere(1.0, 12, 5, true),
+			_xf(Basis(Vector3(0.0, 0.0, 1.0), -0.25 * sx) * Basis.from_scale(Vector3(0.115, 0.08, 0.12) * k), Vector3(0.02 * sx, 0.03, 0.0)), "gold")
+		_put(arm, _sphere(1.0, 12, 4, true),
+			_xf(Basis(Vector3(0.0, 0.0, 1.0), -0.55 * sx) * Basis.from_scale(Vector3(0.10, 0.06, 0.11) * k), Vector3(0.05 * sx, -0.03, 0.0)), "gold")
+		_put(arm, _sphere(1.0, 12, 4, true),
+			_xf(Basis(Vector3(0.0, 0.0, 1.0), -0.8 * sx) * Basis.from_scale(Vector3(0.085, 0.05, 0.10) * k), Vector3(0.07 * sx, -0.085, 0.0)), "gold")
+		if side < 0.0:
+			for kk in range(2):
+				var sp: Basis = Basis(Vector3(0.0, 0.0, 1.0), 0.6) * Basis(Vector3.RIGHT, -0.3 + 0.6 * float(kk))
+				_put(arm, _cyl(0.0, 0.014, 0.07, 5), _xf(sp, Vector3(-0.06, 0.08, -0.03 + 0.06 * float(kk))), "gold")
+		# brassards dorés et gants noirs
+		var fo: String = "fore_" + s
+		_put(fo, _cyl(0.058, 0.050, 0.17, 12), _xf(I, Vector3(0.0, -0.17, 0.0)), "gold")
+		_put(fo, _cyl(0.0595, 0.0595, 0.02, 12), _xf(I, Vector3(0.0, -0.12, 0.0)), "#151515")
+		var hd: String = "hand_" + s
+		_put(hd, _sphere(1.0, 10, 6), _xf(I.scaled(Vector3(0.036, 0.055, 0.046)), Vector3(0.0, -0.045, -0.005)), "#0d0d0f")
+		_put(hd, _cyl(0.014, 0.016, 0.05, 6), _xf(Basis(Vector3.RIGHT, -0.6), Vector3(-0.02 * sx, -0.03, -0.035)), "#0d0d0f")
+		# bottes : pied et semelle, liseré doré au revers
+		var ft: String = "foot_" + s
+		_put(ft, _sphere(1.0, 10, 6), _xf(I.scaled(Vector3(0.062, 0.05, 0.13)), Vector3(0.0, -0.02, -0.05)), "#0c0b0c")
+		_put(ft, _boxm(Vector3(0.12, 0.025, 0.27)), _xf(I, Vector3(0.0, -0.058, -0.045)), "#1a1410")
+		var sh: String = "shin_" + s
+		var trim: TorusMesh = TorusMesh.new()
+		trim.inner_radius = 0.066
+		trim.outer_radius = 0.076
+		trim.rings = 16
+		trim.ring_segments = 4
+		_put(sh, trim, _xf(I.scaled(Vector3(1.0, 0.5, 1.0)), Vector3(0.0, -0.11, 0.0)), "gold")
+
+
+# ================================================================ tête
 
 func _build_head() -> void:
 	head_slot = Node3D.new()
 	head_slot.name = "TeteSlot"
-	head_slot.position = Vector3(0.0, HEAD_RADII.y, 0.0)
+	head_slot.position = Vector3(0.0, HEAD_CENTER_Y, 0.0)
 	_attach("head").add_child(head_slot)
 	_fill_default_head()
 
@@ -170,33 +491,43 @@ func replace_head(new_head: Node3D) -> void:
 
 
 func _fill_default_head() -> void:
+	var I: Basis = Basis.IDENTITY
 	var skull: MeshInstance3D = MeshInstance3D.new()
-	skull.mesh = _ellipsoid(HEAD_RADII * 0.97, 2)
-	skull.material_override = _mat(SKIN)
+	skull.mesh = _ellipsoid(HEAD_RADII * 0.985, 2)
+	skull.material_override = _mat("skin")
 	head_slot.add_child(skull)
-	var hair: MeshInstance3D = MeshInstance3D.new()
-	hair.mesh = _ellipsoid(HEAD_RADII * 1.03, 1)
-	hair.material_override = _mat(HAIR)
-	head_slot.add_child(hair)
 	var face: MeshInstance3D = MeshInstance3D.new()
 	face.mesh = _ellipsoid(HEAD_RADII, 0)
 	var fm: StandardMaterial3D = StandardMaterial3D.new()
-	fm.roughness = 1.0
+	fm.roughness = 0.75
 	if ResourceLoader.exists(FACE_PATH):
+		# texture opaque : visage centré, bords fondus dans la couleur de peau
 		fm.albedo_texture = load(FACE_PATH) as Texture2D
-		fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-		fm.alpha_scissor_threshold = 0.5
 	else:
 		fm.albedo_color = SKIN
 	face.material_override = fm
 	head_slot.add_child(face)
+	# oreilles
+	for side in [-1.0, 1.0]:
+		var ear: MeshInstance3D = MeshInstance3D.new()
+		ear.mesh = _sphere(1.0, 8, 5)
+		ear.transform = _xf(I.scaled(Vector3(0.014, 0.03, 0.02)), Vector3(0.102 * float(side), 0.0, 0.012))
+		ear.material_override = _mat("skin")
+		head_slot.add_child(ear)
+	# lunettes : la monture et les verres sont sur la photo ; branches dorées en 3D
+	for side in [-1.0, 1.0]:
+		var temple: MeshInstance3D = MeshInstance3D.new()
+		temple.mesh = _boxm(Vector3(0.005, 0.006, 0.10))
+		temple.transform = _xf(I, Vector3(0.109 * float(side), 0.018, -0.045))
+		temple.material_override = _mat("gold")
+		head_slot.add_child(temple)
 
 
 ## Ellipsoïde. part : 0 = moitié avant (z < 0) avec UV de projection frontale,
 ## 1 = moitié arrière, 2 = entière.
 func _ellipsoid(r: Vector3, part: int) -> ArrayMesh:
-	var rings: int = 14
-	var segs: int = 20
+	var rings: int = 16
+	var segs: int = 24
 	var verts: PackedVector3Array = PackedVector3Array()
 	var norms: PackedVector3Array = PackedVector3Array()
 	var uvs: PackedVector2Array = PackedVector2Array()
@@ -233,10 +564,10 @@ func _ellipsoid(r: Vector3, part: int) -> ArrayMesh:
 	return mesh
 
 
-# --------------------------------------------------------------- animation
+# ================================================================ animation
 
 ## state : idle, walk, run, jump, fall, dodge, land. speed : vitesse horizontale (m/s).
-## Une rotation positive autour de X balance un membre vers l'avant.
+## Rotation positive autour de X = membre vers l'avant. Bras gauche vers l'extérieur = Z négatif.
 func animate(delta: float, state: String, speed: float) -> void:
 	t += delta
 	var tg: Dictionary = {}
@@ -250,17 +581,20 @@ func animate(delta: float, state: String, speed: float) -> void:
 			phase += delta * speed * 2.2
 			var s: float = sin(phase)
 			var c: float = cos(phase)
-			tg["thigh_l"] = Vector3(s * amp, 0.0, 0.0)
-			tg["thigh_r"] = Vector3(-s * amp, 0.0, 0.0)
+			tg["thigh_l"] = Vector3(s * amp, 0.0, -0.03)
+			tg["thigh_r"] = Vector3(-s * amp, 0.0, 0.03)
 			tg["shin_l"] = Vector3(-(0.1 + maxf(c, 0.0) * amp * 1.1), 0.0, 0.0)
 			tg["shin_r"] = Vector3(-(0.1 + maxf(-c, 0.0) * amp * 1.1), 0.0, 0.0)
-			tg["arm_l"] = Vector3(-s * amp * 0.9, 0.0, -0.08)
-			tg["arm_r"] = Vector3(s * amp * 0.9, 0.0, 0.08)
+			tg["arm_l"] = Vector3(-s * amp * 0.9, 0.0, -0.12)
 			tg["fore_l"] = Vector3(0.3 + rf * 0.6, 0.0, 0.0)
-			tg["fore_r"] = Vector3(0.3 + rf * 0.6, 0.0, 0.0)
+			# bras droit : tient l'épée, balancement réduit, lame traînée en course
+			tg["arm_r"] = Vector3(s * amp * 0.35 - rf * 0.25, 0.0, 0.18 + rf * 0.15)
+			tg["fore_r"] = Vector3(0.35 + rf * 0.2, 0.0, 0.0)
+			tg["hand_r"] = Vector3(-rf * 0.5, 0.0, 0.0)
 			tg["spine"] = Vector3(-rf * 0.25, 0.0, 0.0)
 			tg["chest"] = Vector3(0.0, s * 0.10 * amp, 0.0)
 			tg["head"] = Vector3(rf * 0.20, -s * 0.05, 0.0)
+			tg["coat"] = Vector3(-0.15 - rf * 0.5 + sin(phase * 2.0) * 0.07 * amp, 0.0, 0.0)
 			hy = -absf(s) * 0.04 * amp
 		"jump":
 			tg["thigh_l"] = Vector3(0.7, 0.0, 0.0)
@@ -268,15 +602,17 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["thigh_r"] = Vector3(-0.15, 0.0, 0.0)
 			tg["shin_r"] = Vector3(-0.5, 0.0, 0.0)
 			tg["arm_l"] = Vector3(0.9, 0.0, -0.4)
-			tg["arm_r"] = Vector3(0.9, 0.0, 0.4)
+			tg["arm_r"] = Vector3(0.6, 0.0, 0.5)
 			tg["spine"] = Vector3(-0.1, 0.0, 0.0)
+			tg["coat"] = Vector3(-0.45, 0.0, 0.0)
 		"fall":
 			tg["thigh_l"] = Vector3(0.3, 0.0, 0.0)
 			tg["thigh_r"] = Vector3(-0.2, 0.0, 0.0)
 			tg["shin_l"] = Vector3(-0.4, 0.0, 0.0)
 			tg["shin_r"] = Vector3(-0.4, 0.0, 0.0)
 			tg["arm_l"] = Vector3(0.0, 0.0, -1.3)
-			tg["arm_r"] = Vector3(0.0, 0.0, 1.3)
+			tg["arm_r"] = Vector3(0.0, 0.0, 1.1)
+			tg["coat"] = Vector3(-0.8 + sin(t * 18.0) * 0.08, 0.0, 0.0)
 		"dodge":
 			tg["spine"] = Vector3(-0.6, 0.0, 0.0)
 			tg["chest"] = Vector3(-0.2, 0.0, 0.0)
@@ -289,6 +625,7 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["arm_r"] = Vector3(0.8, 0.0, 0.0)
 			tg["fore_l"] = Vector3(1.2, 0.0, 0.0)
 			tg["fore_r"] = Vector3(1.2, 0.0, 0.0)
+			tg["coat"] = Vector3(-0.6, 0.0, 0.0)
 			hy = -0.30
 		"land":
 			tg["thigh_l"] = Vector3(0.9, 0.0, 0.0)
@@ -299,13 +636,19 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["head"] = Vector3(0.3, 0.0, 0.0)
 			tg["arm_l"] = Vector3(0.4, 0.0, -0.3)
 			tg["arm_r"] = Vector3(0.4, 0.0, 0.3)
+			tg["coat"] = Vector3(0.25, 0.0, 0.0)
 			hy = -0.22
 		_:
-			tg["chest"] = Vector3(sin(t * 2.0) * 0.02, 0.0, 0.0)
-			tg["arm_l"] = Vector3(0.0, 0.0, -0.10)
-			tg["arm_r"] = Vector3(0.0, 0.0, 0.10)
-			tg["fore_l"] = Vector3(0.15, 0.0, 0.0)
-			tg["fore_r"] = Vector3(0.15, 0.0, 0.0)
+			# garde héroïque : jambes écartées, épée tenue basse vers l'avant
+			var br: float = sin(t * 2.0)
+			tg["chest"] = Vector3(br * 0.02, 0.0, 0.0)
+			tg["thigh_l"] = Vector3(0.05, 0.0, -0.07)
+			tg["thigh_r"] = Vector3(-0.05, 0.0, 0.07)
+			tg["arm_l"] = Vector3(0.05, 0.0, -0.16)
+			tg["fore_l"] = Vector3(0.25, 0.0, 0.0)
+			tg["arm_r"] = Vector3(0.22, 0.0, 0.20)
+			tg["fore_r"] = Vector3(0.30, 0.0, 0.0)
+			tg["coat"] = Vector3(-0.04 + br * 0.02, 0.0, 0.0)
 	var k: float = 1.0 - exp(-16.0 * delta)
 	for b in POSED:
 		var cur: Vector3 = current[b]

@@ -9,6 +9,7 @@ var touch_move: Vector2 = Vector2.ZERO   # joystick virtuel (x droite, y bas)
 var cam_delta: Vector2 = Vector2.ZERO    # glissement accumulé pour la caméra
 var jump_buffer: float = 0.0
 var dodge_buffer: float = 0.0
+var zoom_delta: float = 0.0              # >0 = éloigner la caméra
 
 
 func _process(delta: float) -> void:
@@ -31,6 +32,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				jump_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_C:
 				dodge_buffer = BUFFER_TIME
+	elif event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom_delta -= 0.4
+		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom_delta += 0.4
 	elif event is InputEventMouseMotion:
 		var mm: InputEventMouseMotion = event as InputEventMouseMotion
 		if (mm.button_mask & MOUSE_BUTTON_MASK_RIGHT) != 0:
@@ -71,3 +78,9 @@ func consume_cam() -> Vector2:
 	var d: Vector2 = cam_delta
 	cam_delta = Vector2.ZERO
 	return d
+
+
+func consume_zoom() -> float:
+	var z: float = zoom_delta
+	zoom_delta = 0.0
+	return z

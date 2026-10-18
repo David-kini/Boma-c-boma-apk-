@@ -42,7 +42,7 @@ func _mat(key: String) -> StandardMaterial3D:
 	var unshaded: bool = false
 	match key:
 		"stone_light":
-			m.albedo_color = Color(0.70, 0.68, 0.64)
+			m.albedo_color = Color(0.62, 0.60, 0.57)
 		"stone_dark":
 			m.albedo_color = Color(0.45, 0.43, 0.42)
 		"stone_ruin":
@@ -195,9 +195,9 @@ func sign_label(text: String, pos: Vector3) -> void:
 	l.text = text
 	l.position = pos
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.font_size = 48
-	l.pixel_size = 0.02
-	l.outline_size = 12
+	l.font_size = 40
+	l.pixel_size = 0.009
+	l.outline_size = 10
 	l.modulate = Color(1.0, 0.86, 0.35)
 	l.visibility_range_end = 90.0
 	g_extra.append(l)
@@ -273,7 +273,7 @@ func _arena() -> void:
 		var sy: float = _g(sp.x, sp.y)
 		cyl("wood", 0.12, 0.12, 3.0, Vector3(sp.x, sy + 1.5, sp.y), 6, true)
 		box("wood", Vector3(2.6, 0.7, 0.12), Vector3(sp.x, sy + 2.8, sp.y), rot, false)
-		sign_label(String(signs[j]), Vector3(sp.x, sy + 4.2, sp.y))
+		sign_label(String(signs[j]), Vector3(sp.x, sy + 3.6, sp.y))
 	_end()
 
 
