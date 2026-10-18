@@ -4,12 +4,14 @@ extends Node3D
 ## déchargées : le monde de 2 km² n'est jamais entièrement en mémoire.
 
 const WorldData = preload("res://scripts/world_data.gd")
+const ChunkDecor = preload("res://scripts/chunk_decor.gd")
 
 const CHUNK: float = 64.0
 const SKIRT_DEPTH: float = 6.0            # jupe sous les bords : cache les fissures entre niveaux
 const BUILD_INTERVAL: float = 0.10        # une tuile construite toutes les 0,1 s au maximum
 
 var data: RefCounted
+var decor: RefCounted
 var material: StandardMaterial3D
 var chunks: Dictionary = {}               # Vector2i -> {node, lod}
 var view_chunks: int = 5
@@ -20,6 +22,7 @@ var _gen: int = 0                         # incrémenté à chaque changement de
 
 func setup(world_data: RefCounted) -> void:
 	data = world_data
+	decor = ChunkDecor.new(world_data)
 	material = StandardMaterial3D.new()
 	material.vertex_color_use_as_albedo = true
 	material.roughness = 1.0
@@ -126,6 +129,9 @@ func _build(k: Vector2i, lod: int) -> void:
 		cs.shape = mesh.create_trimesh_shape()
 		body.add_child(cs)
 		mi.add_child(body)
+	# arbres, rochers... seulement sur les tuiles proches (pas sur les lointaines)
+	if lod <= 1:
+		decor.call("decorate", mi, k, lod == 0)
 	chunks[k] = {"node": mi, "lod": lod, "gen": _gen}
 
 

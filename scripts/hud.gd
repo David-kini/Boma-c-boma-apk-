@@ -14,6 +14,9 @@ var overlay: Control
 var settings: Control
 var info_text: Label
 var quality_buttons: Array = []
+var zone_banner: Label
+var _last_zone: String = ""
+var _banner_t: float = 0.0
 var _tick: float = 0.0
 
 
@@ -30,6 +33,17 @@ func _ready() -> void:
 	help_label = _make_label(Vector2(20.0, 505.0), 14)
 	help_label.visible = not DisplayServer.is_touchscreen_available()
 	help_label.text = "ZQSD/WASD bouger · Maj courir · Espace sauter · C esquiver · flèches ou clic droit : caméra · Échap : paramètres"
+	zone_banner = Label.new()
+	zone_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	zone_banner.offset_top = 95.0
+	zone_banner.offset_bottom = 150.0
+	zone_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_banner.add_theme_font_size_override("font_size", 40)
+	zone_banner.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	zone_banner.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0))
+	zone_banner.add_theme_constant_override("outline_size", 8)
+	zone_banner.modulate.a = 0.0
+	add_child(zone_banner)
 	overlay = Overlay.new()
 	overlay.name = "Commandes"
 	add_child(overlay)
@@ -52,18 +66,18 @@ func _make_label(pos: Vector2, font_size: int) -> Label:
 func _build_settings() -> void:
 	settings = Control.new()
 	settings.name = "Parametres"
-	settings.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	settings.mouse_filter = Control.MOUSE_FILTER_STOP
 	settings.visible = false
 	add_child(settings)
 
 	var dim: ColorRect = ColorRect.new()
 	dim.color = Color(0.0, 0.0, 0.0, 0.65)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	settings.add_child(dim)
 
 	var center: CenterContainer = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	settings.add_child(center)
 
 	var panel: PanelContainer = PanelContainer.new()
@@ -151,12 +165,21 @@ func _unhandled_input(event: InputEvent) -> void:
 # ------------------------------------------------------------ affichage
 
 func _process(delta: float) -> void:
+	# bannière de zone : apparaît 3 s puis s'efface
+	if _banner_t > 0.0:
+		_banner_t -= delta
+		zone_banner.modulate.a = clampf(_banner_t, 0.0, 1.0)
 	_tick -= delta
 	if _tick > 0.0 or player == null or world == null:
 		return
 	_tick = 0.25
 	var p: Vector3 = player.global_position
-	zone_label.text = String(world.call("zone_name", p.x, p.z))
+	var zname: String = String(world.call("zone_name", p.x, p.z))
+	zone_label.text = zname
+	if zname != _last_zone:
+		_last_zone = zname
+		zone_banner.text = zname
+		_banner_t = 3.0
 	info_label.text = "%d FPS · Qualité : %s · x %d  y %d  z %d" % [
 		Engine.get_frames_per_second(), GameSettings.quality_name(),
 		int(p.x), int(p.y), int(p.z)]

@@ -11,6 +11,16 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Environnement (v0.3)
+- Arène : sol en pierre, anneaux et éclair dorés, 16 piliers, murs, gradins, 4 portes avec linteau, bannières, braseros et panneaux indicateurs.
+- Camp de départ (tente, feu, bancs, caisses) ; chemins de terre entre les zones.
+- Ruines : temple sur plateforme avec rampe, salles cassées, colonnes couchées, arches.
+- Zone rocheuse : rochers, aiguilles, arche naturelle. Forêt fantastique : arbre géant, cristaux, arbres colorés, champignons lumineux.
+- Volcan : lac de lave dans le cratère, pics d'obsidienne. Repaire du boss : obélisques, cristaux rouges, grande porte.
+- Zone des monstres : squelettes géants, pieux, cages, os, arbres morts. Lac Miroir avec ponton. Sapins sur les montagnes.
+- Décor par tuile (MultiMesh) dont la densité suit la qualité graphique ; lieux fusionnés par matériau (peu d'appels de dessin).
+- Bannière du nom de zone à l'entrée de chaque zone.
+
 ## Contenu Phase 2
 Monde 3D ≈ 1414 m × 1414 m en tuiles avec LOD, zones, arène, ruines, rochers, volcan, montagnes de bordure ;
 personnage 3D à squelette (visage photo sur tête ellipsoïde), marche/course/saut/esquive/récupération de chute ;

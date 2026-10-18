@@ -1,9 +1,10 @@
 extends Node3D
-## Monde 3D : relief en tuiles, ciel, soleil, arène circulaire, ruines, rochers,
-## murs invisibles aux limites (derrière les montagnes).
+## Monde 3D : relief en tuiles (avec décor), ciel, soleil, lieux construits
+## (landmarks.gd), murs invisibles aux limites (derrière les montagnes).
 
 const WorldData = preload("res://scripts/world_data.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const Landmarks = preload("res://scripts/landmarks.gd")
 
 var data: RefCounted
 var terrain: Node3D
@@ -20,9 +21,8 @@ func _ready() -> void:
 	terrain.call("setup", data)
 	_build_environment()
 	_build_boundary_walls()
-	_build_arena()
-	_build_ruins()
-	_build_rocks()
+	var lm: RefCounted = Landmarks.new()
+	lm.call("build", self, data)
 	terrain.call("build_around_now", spawn_point(), 1)
 	GameSettings.quality_changed.connect(_apply_quality)
 	_apply_quality(GameSettings.quality)
@@ -107,89 +107,3 @@ func _build_boundary_walls() -> void:
 		cs.position = s[0]
 		body.add_child(cs)
 	add_child(body)
-
-
-func _stone_material(c: Color) -> StandardMaterial3D:
-	var m: StandardMaterial3D = StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 0.9
-	return m
-
-
-func _add_pillar(parent: Node3D, pos: Vector2, h: float, r: float, mat: Material) -> void:
-	var gy: float = data.height_at(pos.x, pos.y)
-	var body: StaticBody3D = StaticBody3D.new()
-	body.position = Vector3(pos.x, gy + h * 0.5 - 0.3, pos.y)
-	var mi: MeshInstance3D = MeshInstance3D.new()
-	var cm: CylinderMesh = CylinderMesh.new()
-	cm.top_radius = r * 0.9
-	cm.bottom_radius = r
-	cm.height = h
-	mi.mesh = cm
-	mi.material_override = mat
-	body.add_child(mi)
-	var cs: CollisionShape3D = CollisionShape3D.new()
-	var sh: CylinderShape3D = CylinderShape3D.new()
-	sh.radius = r
-	sh.height = h
-	cs.shape = sh
-	body.add_child(cs)
-	parent.add_child(body)
-
-
-func _build_arena() -> void:
-	var arena: Node3D = Node3D.new()
-	arena.name = "Arene"
-	add_child(arena)
-	var mat: StandardMaterial3D = _stone_material(Color(0.62, 0.60, 0.58))
-	var count: int = 16
-	for i in range(count):
-		var a: float = TAU * float(i) / float(count)
-		var h: float = 9.0 if i % 2 == 0 else 6.5
-		_add_pillar(arena, Vector2(cos(a), sin(a)) * (WorldData.ARENA_RADIUS + 2.0), h, 1.3, mat)
-
-
-func _build_ruins() -> void:
-	var ruins: Node3D = Node3D.new()
-	ruins.name = "Ruines"
-	add_child(ruins)
-	var mat: StandardMaterial3D = _stone_material(Color(0.50, 0.48, 0.46))
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = 5
-	var zone: Dictionary = WorldData.ZONES["ruines"]
-	var c: Vector2 = zone["center"]
-	for i in range(16):
-		var a: float = rng.randf() * TAU
-		var d: float = rng.randf() * 90.0
-		_add_pillar(ruins, c + Vector2(cos(a), sin(a)) * d, rng.randf_range(3.0, 8.0), rng.randf_range(0.8, 1.4), mat)
-
-
-func _build_rocks() -> void:
-	var rocks: Node3D = Node3D.new()
-	rocks.name = "Rochers"
-	add_child(rocks)
-	var mat: StandardMaterial3D = _stone_material(Color(0.40, 0.38, 0.38))
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = 11
-	var zone: Dictionary = WorldData.ZONES["rochers"]
-	var c: Vector2 = zone["center"]
-	for i in range(24):
-		var a: float = rng.randf() * TAU
-		var d: float = rng.randf() * 120.0
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * d
-		var s: float = rng.randf_range(1.5, 4.0)
-		var body: StaticBody3D = StaticBody3D.new()
-		body.position = Vector3(p.x, data.height_at(p.x, p.y) + s * 0.4, p.y)
-		var mi: MeshInstance3D = MeshInstance3D.new()
-		var sm: SphereMesh = SphereMesh.new()
-		sm.radius = s
-		sm.height = s * 2.0
-		mi.mesh = sm
-		mi.material_override = mat
-		body.add_child(mi)
-		var cs: CollisionShape3D = CollisionShape3D.new()
-		var ss: SphereShape3D = SphereShape3D.new()
-		ss.radius = s
-		cs.shape = ss
-		body.add_child(cs)
-		rocks.add_child(body)
