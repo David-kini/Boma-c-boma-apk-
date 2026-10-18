@@ -1,0 +1,36 @@
+name: Build APK Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparer Godot (templates, SDK, cle de debug)
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates ~/.config/godot build/android
+          mv /root/.local/share/godot/export_templates/4.3.stable ~/.local/share/godot/export_templates/4.3.stable || true
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+          {
+            echo '[gd_resource type="EditorSettings" format=3]'
+            echo '[resource]'
+            echo 'export/android/android_sdk_path = "/usr/lib/android-sdk"'
+            echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"'
+            echo "export/android/debug_keystore = \"$PWD/debug.keystore\""
+            echo 'export/android/debug_keystore_user = "androiddebugkey"'
+            echo 'export/android/debug_keystore_pass = "android"'
+          } > ~/.config/godot/editor_settings-4.3.tres
+      - name: Importer les ressources
+        run: godot --headless --verbose --import || true
+      - name: Exporter l'APK (debug)
+        run: godot --headless --verbose --export-debug "Android" build/android/DuelEclair.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DuelEclair-apk
+          path: build/android/DuelEclair.apk

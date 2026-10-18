@@ -1,0 +1,44 @@
+; Duel Éclair — Rise of Legend (Phase 2 : monde 3D)
+config_version=5
+
+[application]
+
+config/name="Duel Éclair - Rise of Legend"
+config/description="RPG d'action 3D solo hors ligne (Godot 4.3+)."
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+run/max_fps=60
+config/icon="res://assets/textures/face.png"
+
+[autoload]
+
+GameSettings="*res://scripts/game_settings.gd"
+GameInput="*res://scripts/game_input.gd"
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=540
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+window/energy_saving/keep_screen_on=true
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=false
+pointing/emulate_mouse_from_touch=false
+
+[layer_names]
+
+3d_physics/layer_1="monde"
+3d_physics/layer_2="joueur"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+lights_and_shadows/directional_shadow/size=1024
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=0
+environment/defaults/default_clear_color=Color(0.6, 0.75, 0.9, 1)
