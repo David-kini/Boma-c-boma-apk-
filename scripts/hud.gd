@@ -777,7 +777,8 @@ func _update_boss_bar() -> void:
 		var bn: Node3D = b as Node3D
 		if String(bn.get("state")) == "dead" or String(bn.get("state")) == "idle":
 			continue
-		if bn.global_position.distance_to(player.global_position) > 40.0:
+		var far: float = 90.0 if String(bn.get("boss_kind")) == "dragon" else 40.0
+		if bn.global_position.distance_to(player.global_position) > far:
 			continue
 		show = true
 		var r: float = clampf(float(bn.get("hp")) / float(bn.get("max_hp")), 0.0, 1.0)

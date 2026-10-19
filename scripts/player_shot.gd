@@ -78,8 +78,10 @@ func _process(delta: float) -> void:
 		var en: Node3D = e as Node3D
 		if en == null or _hit.has(en) or String(en.get("state")) == "dead":
 			continue
-		var d: Vector3 = en.global_position + Vector3(0.0, 0.9, 0.0) - global_position
-		if d.length() < 1.4:
+		var hrv: Variant = en.get("hit_radius")
+		var hr: float = float(hrv) if hrv != null else 0.0
+		var d: Vector3 = en.global_position + Vector3(0.0, 0.9 if hr == 0.0 else 0.0, 0.0) - global_position
+		if d.length() < 1.4 + hr:
 			_hit.append(en)
 			en.call("take_damage", damage, global_position - dir)
 			CombatFx.spark(get_parent(), global_position, color, 0.9)

@@ -170,7 +170,8 @@ func _update_mode(rd: float) -> void:
 	for b in get_tree().get_nodes_in_group("boss"):
 		var bn: Node3D = b as Node3D
 		var st: String = String(bn.get("state"))
-		if st != "dead" and st != "idle" and bn.global_position.distance_to(target.global_position) < 35.0:
+		var far: float = 70.0 if String(bn.get("boss_kind")) == "dragon" else 35.0
+		if st != "dead" and st != "idle" and bn.global_position.distance_to(target.global_position) < far:
 			boss = bn
 			break
 	var gh: float = 0.0
@@ -202,6 +203,11 @@ func _update_mode(rd: float) -> void:
 				var to_b: Vector3 = boss.global_position - target.global_position
 				var want: float = atan2(-to_b.x, -to_b.z)
 				yaw = lerp_angle(yaw, want, 1.0 - exp(-1.5 * rd))
+				# boss volant (dragon) : la caméra lève les yeux pour le garder visible
+				if to_b.y > 5.0:
+					dm = 2.0
+					var up: float = clampf(atan2(to_b.y, Vector2(to_b.x, to_b.z).length()) * 0.7, 0.0, PITCH_MAX)
+					pitch = lerpf(pitch, up, 1.0 - exp(-1.2 * rd))
 		"defeat":
 			dm = 2.0
 			pa = 1.0

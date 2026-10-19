@@ -11,6 +11,20 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Boss final : le Dragon des royaumes (v0.15)
+- Modèle « Dragon » du pack CC0 Ultimate Monsters (Quaternius), récupéré depuis le Drive
+  (Assets/Characters/Monsters/Dragon.gltf, animations de vol, coup de tête, mort).
+- Apparaît au-dessus de la Grande Arène (la forteresse) quand les 5 boss sont vaincus.
+- Vole en cercle et crache des boules de feu (elles touchent aussi le héros en vol).
+- Se pose au sommet d'une des 8 tours et lance des attaques de zone : cercles rouges au
+  sol qui explosent après 1,2 s. C'est le moment de voler / se téléporter jusqu'à lui.
+- Phase 2 (60 %) : piqués sur le héros avec onde de choc ; reste un instant au sol.
+- Phase 3 (30 %) : plus rapide, plus de zones de feu.
+- Grande cible : les coups d'épée, tirs et ondes de choc le touchent sur tout son corps,
+  à condition d'être à sa hauteur (vol, tour, ou pendant son piqué).
+- La caméra lève les yeux pour le garder dans le cadre. Sa défaite lance la fin.
+- Testé : apparition, 4 comportements, 3 phases, mort, cinématique de fin.
+
 ## Scénario « Shadow Ninja », étape 2 : boss de région et cinématiques (v0.14)
 - Gardien des montagnes (Pics enneigés) : coups lents et lourds, zone d'impact rouge
   affichée au sol pendant la préparation, longue récupération (moment pour attaquer).
@@ -21,12 +35,10 @@ Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeab
 - Seigneur des nuages (au-dessus des Pics) : combat aérien en 3 phases (observation :
   tirs à distance ; affrontement : se rapproche ; dernière phase : plus rapide).
 - Victoire contre un boss : courte célébration ; les 5 boss vaincus (avec le Roi
-  Squelette) débloquent la cinématique de fin. Progression sauvegardée.
+  Squelette) réveillent le Dragon des royaumes (v0.15). Progression sauvegardée.
 - Cinématique d'introduction « La chute du royaume » (23 s, passable) au premier
   lancement ; cinématique de fin (36 s) avec scène supplémentaire ; les deux se revoient
   depuis le menu.
-- Le Dragon des royaumes (boss final) n'est pas encore fait : il faut un modèle 3D de
-  dragon (pack CC0 « Ultimate Monsters » de Quaternius, à fournir).
 
 ## Scénario « Shadow Ninja », étape 1 : combos, combat aérien, caméra (v0.13)
 - Architecture réutilisable : scripts/combos.gd décrit chaque technique (condition,

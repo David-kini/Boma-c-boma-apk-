@@ -167,6 +167,7 @@ func _process(delta: float) -> void:
 	if players.is_empty():
 		return
 	var pp: Vector3 = (players[0] as Node3D).global_position
+	_dragon_check(players[0] as Node3D)
 	for i in range(slots.size()):
 		if _alive.has(i) and is_instance_valid(_alive[i]):
 			continue
@@ -271,3 +272,22 @@ func _spawn_wave(i: int) -> void:
 			add_child(e)
 			_wave_enemies.append(e)
 			load("res://scripts/combat_fx.gd").call("spark", self, e.position + Vector3(0.0, 1.0, 0.0), Color(0.7, 0.3, 1.0), 1.6)
+
+
+# ================================================================ boss final
+const DragonBoss = preload("res://scripts/dragon_boss.gd")
+var dragon: Node3D = null
+
+
+## Le Dragon des royaumes apparaît au-dessus de la Grande Arène une fois les 5 boss
+## de région vaincus, tant qu'il n'a pas été battu.
+func _dragon_check(pl: Node3D) -> void:
+	var st: Array = pl.get("story")
+	if not st.has("dragon_eveille") or st.has("boss_dragon"):
+		return
+	if dragon != null and is_instance_valid(dragon):
+		return
+	dragon = DragonBoss.new()
+	dragon.set("world", world)
+	add_child(dragon)
+	dragon.global_position = Vector3(0.0, 40.0, 0.0)

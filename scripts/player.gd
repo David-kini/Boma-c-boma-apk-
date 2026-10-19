@@ -694,6 +694,12 @@ func _deal_hits(a: Dictionary) -> void:
 		var to_e: Vector3 = en.global_position - global_position
 		to_e.y = 0.0
 		var dist: float = to_e.length()
+		var hr: float = _hit_r(en)
+		if hr > 0.0:
+			# grande cible (dragon) : portée élargie mais il faut être à sa hauteur
+			if absf(en.global_position.y - global_position.y) > hr + 2.5:
+				continue
+			dist = maxf(0.0, dist - hr)
 		if dist > float(a["range"]):
 			continue
 		if float(a["arc"]) > -1.0 and dist > 0.4 and fwd.dot(to_e.normalized()) < float(a["arc"]):
@@ -1798,14 +1804,21 @@ func _strike(en: Node3D, dmg: float, from: Vector3, col: Color) -> void:
 	on_ranged_hit()
 
 
+## Rayon de corps d'une grande cible (0 pour les ennemis normaux).
+func _hit_r(en: Node) -> float:
+	var v: Variant = en.get("hit_radius")
+	return float(v) if v != null else 0.0
+
+
 func _enemies_near(pos: Vector3, r: float, max_dy: float = 3.0) -> Array:
 	var out: Array = []
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var en: Node3D = e as Node3D
 		if en == null or String(en.get("state")) == "dead":
 			continue
-		var dd: float = Vector2(en.global_position.x - pos.x, en.global_position.z - pos.z).length()
-		if dd < r and absf(en.global_position.y - pos.y) < max_dy:
+		var hr: float = _hit_r(en)
+		var dd: float = Vector2(en.global_position.x - pos.x, en.global_position.z - pos.z).length() - hr
+		if dd < r and absf(en.global_position.y - pos.y) < max_dy + hr:
 			out.append(en)
 	return out
 
@@ -2274,15 +2287,24 @@ func bosses_count() -> int:
 	return n
 
 
-## Appelé à la mort d'un boss : la fin se débloque quand les 5 boss sont vaincus.
+## Appelé à la mort d'un boss : après les 5 boss de région, le Dragon des royaumes
+## apparaît au-dessus de la Grande Arène ; sa défaite débloque et lance la fin.
 func boss_defeated(kind: String) -> void:
 	var k: String = kind if kind != "" else "roi"
 	mark_story("boss_" + k)
+	if k == "dragon":
+		announce.emit("Le Dragon des royaumes est vaincu !")
+		if not story.has("fin_debloquee"):
+			mark_story("fin_debloquee")
+			var t: SceneTreeTimer = get_tree().create_timer(3.0)
+			t.timeout.connect(func() -> void:
+				var c: Node = get_parent().get("cinematic")
+				if c != null:
+					c.call("play_ending"))
+		return
 	announce.emit("Boss vaincus : %d / 5" % bosses_count())
-	if bosses_count() >= ALL_BOSSES.size() and not story.has("fin_debloquee"):
-		mark_story("fin_debloquee")
-		var t: SceneTreeTimer = get_tree().create_timer(2.5)
-		t.timeout.connect(func() -> void:
-			var c: Node = get_parent().get("cinematic")
-			if c != null:
-				c.call("play_ending"))
+	if bosses_count() >= ALL_BOSSES.size() and not story.has("dragon_eveille"):
+		mark_story("dragon_eveille")
+		var t2: SceneTreeTimer = get_tree().create_timer(3.0)
+		t2.timeout.connect(func() -> void:
+			announce.emit("Le Dragon des royaumes apparaît au-dessus de la Grande Arène !"))

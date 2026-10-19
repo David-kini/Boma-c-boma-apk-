@@ -122,9 +122,13 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	tp_at = int(args.get("tp", "-1"))
 	autoattack = args.has("autoattack")
 	report = args.has("report")
+	dragon_mode = String(args.get("dragon", ""))
+	if dragon_mode != "":
+		player.set("story", ["intro_vue", "dragon_eveille"])
 
 
 var autoattack: bool = false
+var dragon_mode: String = ""
 var shoot_at: int = -1
 var powers_menu_at: int = -1
 var tp_hold: bool = false
@@ -164,6 +168,29 @@ func _process(delta: float) -> void:
 		GameInput.shoot_buffer = 0.2
 	if _n == tp_at:
 		GameInput.tp_buffer = 0.2
+	if dragon_mode != "" and _n == 3:
+		# boss final : le fait apparaître tout de suite dans le mode demandé (tour, perche, pique)
+		var sp: Node = player.get("world").get_node("Ennemis")
+		sp.call("_dragon_check", player)
+		var dg: Node3D = sp.get("dragon")
+		dg.set("player", player)
+		dg.set("state", "fight")
+		match dragon_mode:
+			"perche":
+				dg.call("_start_perch")
+				dg.global_position = dg.get("_perch")
+			"pique":
+				dg.global_position = player.global_position + Vector3(0.0, 14.0, -14.0)
+				dg.call("_start_dive")
+			_:
+				dg.global_position = Vector3(cos(0.0) * 30.0, 22.0, 0.0)
+	if dragon_mode != "" and _n > 3:
+		player.set("hp", player.get("max_hp"))
+		var dg2: Node3D = player.get("world").get_node("Ennemis").get("dragon")
+		if dg2 != null and is_instance_valid(dg2):
+			var dd: Vector3 = dg2.global_position - player.global_position
+			if _n == frames - 1:
+				print("BILAN dragon pos=", dg2.global_position.snapped(Vector3.ONE), " mode=", dg2.get("_mode"), " d=", int(dd.length()))
 	if cine != "" and _n == 3:
 		var c: Node = get_parent().get("cinematic")
 		c.call("play_intro" if cine == "intro" else "play_ending")
