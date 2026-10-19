@@ -182,6 +182,9 @@ var _hist: Array = []
 var _tech_cd: Dictionary = {}
 var _charge_t: float = 0.0
 var _air_press: bool = false
+# --- histoire : cinématiques vues, boss vaincus
+var story: Array = []
+const ALL_BOSSES: Array = ["roi", "gardien", "reine", "ombre", "nuages"]
 
 
 func _ready() -> void:
@@ -982,7 +985,7 @@ func add_xp(amount: int) -> void:
 
 func save_progress() -> void:
 	SaveGame.save({"level": level, "xp": xp, "weapon": weapon_index, "wings": wings_variant,
-		"gold": gold, "potions": potions, "coat": coat_name, "power": power_index})
+		"gold": gold, "potions": potions, "coat": coat_name, "power": power_index, "story": story})
 
 
 func _load_progress() -> void:
@@ -995,6 +998,7 @@ func _load_progress() -> void:
 	potions = int(d.get("potions", 1))
 	coat_name = String(d.get("coat", "Noir"))
 	power_index = int(d.get("power", 0))
+	story = Array(d.get("story", []))
 	max_hp = 120.0 + 10.0 * float(level - 1)
 	hp = max_hp
 	if int(Weapons.get_def(weapon_index)["level"]) > level:
@@ -1740,6 +1744,14 @@ func _teleport_aimed() -> void:
 # météore, éclipse, célébration). Pendant une action, la marche, le saut, l'esquive et
 # les autres attaques sont bloqués ; certaines actions peuvent être interrompues par ESQ.
 
+## Cible de l'action en cours (null si elle a disparu, ex. illusion détruite).
+func _act_target() -> Node3D:
+	var v: Variant = _act.get("target", null)
+	if v == null or not is_instance_valid(v):
+		return null
+	return v as Node3D
+
+
 func _push_input(letter: String) -> void:
 	_hist.append([letter, Time.get_ticks_msec()])
 	if _hist.size() > 6:
@@ -1859,7 +1871,7 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 				return
 			move_and_slide()
 		"dragon_rush":
-			var tg2: Node3D = _act.get("target", null)
+			var tg2: Node3D = _act_target()
 			invulnerable = true
 			if step == 0:
 				var dir: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
@@ -1897,7 +1909,7 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 			invulnerable = true
 			velocity = Vector3.ZERO
 			state = "attack"
-			var tg3: Node3D = _act.get("target", null)
+			var tg3: Node3D = _act_target()
 			if step == 0:
 				if tg3 != null:
 					var away: Vector3 = tg3.global_position - global_position
@@ -1927,7 +1939,7 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 			move_and_slide()
 		"aerienne":
 			# Exécution aérienne : frappe ascendante, 2 frappes en l'air, coup descendant
-			var tg4: Node3D = _act.get("target", null)
+			var tg4: Node3D = _act_target()
 			if GameInput.dodge_buffer > 0.0:
 				_end_action()
 				return
@@ -2023,7 +2035,7 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 			move_and_slide()
 		"celeste":
 			# Dragon céleste (en vol) : frappe diagonale, projection, pivot, seconde frappe
-			var tg5: Node3D = _act.get("target", null)
+			var tg5: Node3D = _act_target()
 			invulnerable = true
 			state = "attack"
 			if tg5 == null or not is_instance_valid(tg5) or String(tg5.get("state")) == "dead":
@@ -2089,8 +2101,9 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 				var targets2: Array = _act.get("targets", [])
 				var idx: int = step - 1
 				if t >= 0.3 + 0.18 * float(idx) and idx < targets2.size():
-					var en3: Node3D = targets2[idx]
-					if is_instance_valid(en3) and String(en3.get("state")) != "dead":
+					var raw: Variant = targets2[idx]
+					var en3: Node3D = raw as Node3D if is_instance_valid(raw) else null
+					if en3 != null and String(en3.get("state")) != "dead":
 						CombatFx.afterimage(get_parent(), global_position, col)
 						var ang2: float = float(idx) * 2.4
 						global_position = en3.global_position + Vector3(cos(ang2) * 1.3, 0.6, sin(ang2) * 1.3)
@@ -2243,3 +2256,33 @@ func _aerial_target() -> Node3D:
 		if not bool(en.get("is_boss")) and not bool(en.get("flying")):
 			return en
 	return null
+
+
+# ================================================================ histoire
+
+func mark_story(flag: String) -> void:
+	if not story.has(flag):
+		story.append(flag)
+		save_progress()
+
+
+func bosses_count() -> int:
+	var n: int = 0
+	for b in ALL_BOSSES:
+		if story.has("boss_" + String(b)):
+			n += 1
+	return n
+
+
+## Appelé à la mort d'un boss : la fin se débloque quand les 5 boss sont vaincus.
+func boss_defeated(kind: String) -> void:
+	var k: String = kind if kind != "" else "roi"
+	mark_story("boss_" + k)
+	announce.emit("Boss vaincus : %d / 5" % bosses_count())
+	if bosses_count() >= ALL_BOSSES.size() and not story.has("fin_debloquee"):
+		mark_story("fin_debloquee")
+		var t: SceneTreeTimer = get_tree().create_timer(2.5)
+		t.timeout.connect(func() -> void:
+			var c: Node = get_parent().get("cinematic")
+			if c != null:
+				c.call("play_ending"))

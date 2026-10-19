@@ -18,6 +18,17 @@ const SORCIER: Dictionary = {"path": AD + "Mage.glb", "weapon_path": "", "keep_p
 	"attack_anim": "2H_Melee_Attack_Chop", "ranged": true, "detect_radius": 18.0, "tint": Color(0.75, 0.6, 0.8),
 	"fire_color": Color(1.0, 0.4, 0.1)}
 const SPECTRE: Dictionary = {"path": SK + "Skeleton_Rogue.glb", "flying": true, "detect_radius": 22.0, "xp": 25}
+const GARDIEN: Dictionary = {"path": AD + "Barbarian.glb", "weapon_path": "", "keep_props": ["2H_Axe", "Barbarian_Hat", "Barbarian_Cape"],
+	"attack_anim": "2H_Melee_Attack_Chop", "hit_time": 1.05, "attack_time": 2.4, "attack_range": 4.0, "tint": Color(0.75, 0.8, 0.95),
+	"is_boss": true, "boss_kind": "gardien", "detect_radius": 22.0, "xp": 500}
+const REINE: Dictionary = {"path": AD + "Rogue.glb", "weapon_path": "", "keep_props": ["Knife", "Knife_Offhand", "Rogue_Cape"],
+	"attack_anim": "Dualwield_Melee_Attack_Stab", "hit_time": 0.35, "attack_time": 0.8, "tint": Color(0.6, 0.95, 0.6), "ranged": true,
+	"fire_color": Color(0.4, 1.0, 0.4), "is_boss": true, "boss_kind": "reine", "detect_radius": 24.0, "xp": 500}
+const OMBRE: Dictionary = {"path": AD + "Rogue.glb", "weapon_path": "", "keep_props": ["Knife", "Knife_Offhand", "Rogue_Cape"],
+	"attack_anim": "Dualwield_Melee_Attack_Stab", "hit_time": 0.4, "attack_time": 0.85, "tint": Color(0.35, 0.25, 0.5), "ranged": true,
+	"fire_color": Color(0.6, 0.2, 1.0), "is_boss": true, "boss_kind": "ombre", "detect_radius": 22.0, "xp": 550}
+const NUAGES: Dictionary = {"path": SK + "Skeleton_Mage.glb", "weapon_path": SK + "Weapons/Skeleton_Staff.gltf", "flying": true,
+	"ranged": true, "fire_color": Color(0.5, 0.8, 1.0), "is_boss": true, "boss_kind": "nuages", "detect_radius": 45.0, "xp": 650}
 const ROI: Dictionary = {"weapon_path": SK + "Weapons/Skeleton_Axe.gltf", "is_boss": true, "attack_range": 3.2,
 	"hit_time": 0.55, "attack_time": 1.05, "detect_radius": 22.0, "xp": 600}
 
@@ -95,6 +106,11 @@ func setup(w: Node3D) -> void:
 		["Skeleton_Warrior", Vector2(-70.0, -60.0), 60.0, 8.0, 3.3, 1.3, "Squelette guerrier"],
 		["Skeleton_Minion", vi + Vector2(55.0, -20.0), 30.0, 5.0, 3.4, 1.2, "Squelette égaré"],
 		["", Vector2(110.0, 30.0), 55.0, 7.0, 5.6, 1.15, "Assassin", ASSASSIN],
+		# boss de région
+		["", WorldData.PEAKS_CENTER + Vector2(5.0, 14.0), 900.0, 30.0, 2.4, 2.6, "Gardien des montagnes", GARDIEN],
+		["", WorldData.ZONES["foret"]["center"] + Vector2(0.0, 12.0), 700.0, 12.0, 6.0, 1.6, "Reine de la forêt", REINE],
+		["", WorldData.ZONES["bois_sombre"]["center"] + Vector2(0.0, 4.0), 800.0, 14.0, 5.0, 1.5, "Seigneur des ombres", OMBRE],
+		["", WorldData.PEAKS_CENTER + Vector2(-10.0, -40.0), 900.0, 14.0, 6.0, 2.4, "Seigneur des nuages", NUAGES],
 		# spectres ailés : ennemis volants (ils peuvent te frapper pendant le vol)
 		["", Vector2(60.0, 30.0), 45.0, 7.0, 5.0, 1.15, "Spectre ailé", SPECTRE],
 		["", mo + Vector2(-20.0, -10.0), 45.0, 7.0, 5.0, 1.15, "Spectre ailé", SPECTRE],

@@ -9,6 +9,7 @@ var speed: float = 13.0
 var damage: float = 10.0
 var color: Color = Color(1.0, 0.45, 0.1)
 var world: Node3D = null
+var hits_flying: bool = false    # tirs du boss aérien et des boss : touchent aussi en vol
 var _life: float = 3.0
 
 
@@ -49,7 +50,7 @@ func _process(delta: float) -> void:
 	var ps: Array = get_tree().get_nodes_in_group("player")
 	if not ps.is_empty():
 		var p: Node3D = ps[0] as Node3D
-		if p.global_position.distance_to(global_position - Vector3(0.0, 1.0, 0.0)) < 0.9 and not bool(p.get("is_flying")):
+		if p.global_position.distance_to(global_position - Vector3(0.0, 1.0, 0.0)) < 0.9 and (hits_flying or not bool(p.get("is_flying"))):
 			p.call("take_damage", damage, global_position)
 			_explode()
 			return

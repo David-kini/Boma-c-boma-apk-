@@ -34,6 +34,14 @@ var boss_fill: ColorRect
 var boss_name: Label
 var title_screen: Control
 var powers_panel: Control
+var cine_root: Control
+var cine_text: Label
+var cine_who: Label
+var cine_title_l: Label
+var cine_sub_l: Label
+var cine_fade_r: ColorRect
+var _cine_hidden: Array = []
+var _title_t: float = 0.0
 var power_buttons: Array = []
 var _combo_pop: float = 0.0
 var _last_zone: String = ""
@@ -161,6 +169,7 @@ func _ready() -> void:
 	add_child(overlay)
 	_build_settings()
 	_build_powers()
+	_build_cine()
 	_build_title()
 
 
@@ -339,6 +348,128 @@ func _on_power_chosen(i: int) -> void:
 	close_powers()
 
 
+# ------------------------------------------------------------ cinématiques
+
+func _build_cine() -> void:
+	cine_root = Control.new()
+	cine_root.name = "Cinematique"
+	cine_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cine_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cine_root.visible = false
+	add_child(cine_root)
+	for top in [true, false]:
+		var bar: ColorRect = ColorRect.new()
+		bar.color = Color(0, 0, 0, 1)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE if top else Control.PRESET_BOTTOM_WIDE)
+		if top:
+			bar.offset_bottom = 60.0
+		else:
+			bar.offset_top = -90.0
+		cine_root.add_child(bar)
+	cine_fade_r = ColorRect.new()
+	cine_fade_r.color = Color(0, 0, 0, 0)
+	cine_fade_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cine_fade_r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cine_root.add_child(cine_fade_r)
+	cine_who = Label.new()
+	cine_who.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	cine_who.offset_top = -86.0
+	cine_who.offset_bottom = -62.0
+	cine_who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cine_who.add_theme_font_size_override("font_size", 18)
+	cine_who.add_theme_color_override("font_color", Color(1.0, 0.8, 0.35))
+	cine_root.add_child(cine_who)
+	cine_text = Label.new()
+	cine_text.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	cine_text.offset_top = -62.0
+	cine_text.offset_bottom = -8.0
+	cine_text.offset_left = 60.0
+	cine_text.offset_right = -60.0
+	cine_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cine_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cine_text.add_theme_font_size_override("font_size", 20)
+	cine_root.add_child(cine_text)
+	cine_title_l = Label.new()
+	cine_title_l.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	cine_title_l.offset_left = -500.0
+	cine_title_l.offset_right = 500.0
+	cine_title_l.offset_top = -70.0
+	cine_title_l.offset_bottom = 10.0
+	cine_title_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cine_title_l.add_theme_font_size_override("font_size", 64)
+	cine_title_l.add_theme_color_override("font_color", Color(1.0, 0.84, 0.3))
+	cine_title_l.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.0))
+	cine_title_l.add_theme_constant_override("outline_size", 12)
+	cine_root.add_child(cine_title_l)
+	cine_sub_l = Label.new()
+	cine_sub_l.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	cine_sub_l.offset_left = -500.0
+	cine_sub_l.offset_right = 500.0
+	cine_sub_l.offset_top = 14.0
+	cine_sub_l.offset_bottom = 60.0
+	cine_sub_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cine_sub_l.add_theme_font_size_override("font_size", 28)
+	cine_sub_l.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+	cine_sub_l.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	cine_sub_l.add_theme_constant_override("outline_size", 6)
+	cine_root.add_child(cine_sub_l)
+	var skip: Button = Button.new()
+	skip.text = "Passer ▶"
+	skip.add_theme_font_size_override("font_size", 18)
+	skip.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	skip.offset_left = -150.0
+	skip.offset_right = -14.0
+	skip.offset_top = 12.0
+	skip.offset_bottom = 50.0
+	skip.pressed.connect(func() -> void:
+		var c: Node = get_parent().get("cinematic")
+		if c != null:
+			c.call("skip"))
+	cine_root.add_child(skip)
+
+
+func cine_begin() -> void:
+	_cine_hidden.clear()
+	for ch in get_children():
+		if ch is CanvasItem and ch != cine_root and (ch as CanvasItem).visible:
+			(ch as CanvasItem).visible = false
+			_cine_hidden.append(ch)
+	cine_root.visible = true
+	cine_text.text = ""
+	cine_who.text = ""
+	cine_title_l.text = ""
+	cine_sub_l.text = ""
+	cine_fade_r.color.a = 0.0
+
+
+func cine_end() -> void:
+	cine_root.visible = false
+	for ch in _cine_hidden:
+		if is_instance_valid(ch):
+			(ch as CanvasItem).visible = true
+	_cine_hidden.clear()
+	settings.visible = false
+	powers_panel.visible = false
+	title_screen.visible = false
+
+
+func cine_line(who: String, text: String) -> void:
+	cine_who.text = who
+	cine_text.text = text
+
+
+func cine_title(title: String, sub: String, dur: float) -> void:
+	cine_title_l.text = title
+	cine_sub_l.text = sub
+	_title_t = dur
+
+
+func cine_fade(alpha: float, time: float) -> void:
+	var tw: Tween = cine_fade_r.create_tween()
+	tw.tween_property(cine_fade_r, "color:a", alpha, time)
+
+
 func show_title() -> void:
 	title_screen.visible = true
 	overlay.visible = false
@@ -350,6 +481,11 @@ func start_game() -> void:
 	overlay.visible = true
 	get_tree().paused = false
 	Sfx.play("levelup")
+	# première partie : cinématique d'introduction (passable)
+	if player != null and not (player.get("story") as Array).has("intro_vue"):
+		var c: Node = get_parent().get("cinematic")
+		if c != null:
+			c.call("play_intro")
 
 
 func _make_label(pos: Vector2, font_size: int) -> Label:
@@ -460,6 +596,29 @@ func _build_settings() -> void:
 		GameSettings.set_cam_fx(not GameSettings.cam_fx)
 		camfx.text = "Effets de caméra : " + ("normaux" if GameSettings.cam_fx else "réduits"))
 	vb.add_child(camfx)
+	var story: HBoxContainer = HBoxContainer.new()
+	story.add_theme_constant_override("separation", 6)
+	vb.add_child(story)
+	var intro_b: Button = Button.new()
+	intro_b.text = "Revoir l'introduction"
+	intro_b.custom_minimum_size = Vector2(187.0, 34.0)
+	intro_b.add_theme_font_size_override("font_size", 14)
+	intro_b.pressed.connect(func() -> void:
+		close_settings()
+		get_parent().get("cinematic").call("play_intro"))
+	story.add_child(intro_b)
+	var end_b: Button = Button.new()
+	end_b.name = "BoutonFin"
+	end_b.text = "Voir la fin"
+	end_b.custom_minimum_size = Vector2(187.0, 34.0)
+	end_b.add_theme_font_size_override("font_size", 14)
+	end_b.pressed.connect(func() -> void:
+		if player != null and (player.get("story") as Array).has("fin_debloquee"):
+			close_settings()
+			get_parent().get("cinematic").call("play_ending")
+		else:
+			show_banner("Bats les 5 boss pour débloquer la fin (%d / 5)" % int(player.call("bosses_count"))))
+	story.add_child(end_b)
 	var pw: Button = Button.new()
 	pw.text = "Pouvoirs…"
 	pw.custom_minimum_size = Vector2(380.0, 40.0)
@@ -556,6 +715,13 @@ func _unhandled_input(event: InputEvent) -> void:
 # ------------------------------------------------------------ affichage
 
 func _process(delta: float) -> void:
+	if _title_t > 0.0:
+		_title_t -= delta
+		if _title_t <= 0.0:
+			cine_title_l.text = ""
+			cine_sub_l.text = ""
+	if cine_root.visible:
+		return
 	if GameInput.powers_menu_buffer > 0.0:
 		GameInput.powers_menu_buffer = 0.0
 		if powers_panel.visible:

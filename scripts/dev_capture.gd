@@ -117,6 +117,8 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	powers_menu_at = 25 if args.has("powersmenu") else -1
 	tp_hold = args.has("tphold")
 	hold_attack = args.has("holdattack")
+	cine = String(args.get("cine", ""))
+	cine_t = float(args.get("cinet", "0"))
 	tp_at = int(args.get("tp", "-1"))
 	autoattack = args.has("autoattack")
 	report = args.has("report")
@@ -127,6 +129,8 @@ var shoot_at: int = -1
 var powers_menu_at: int = -1
 var tp_hold: bool = false
 var hold_attack: bool = false
+var cine: String = ""
+var cine_t: float = 0.0
 var tp_at: int = -1
 var _open_menu_at: int = -1
 var report: bool = false
@@ -160,6 +164,10 @@ func _process(delta: float) -> void:
 		GameInput.shoot_buffer = 0.2
 	if _n == tp_at:
 		GameInput.tp_buffer = 0.2
+	if cine != "" and _n == 3:
+		var c: Node = get_parent().get("cinematic")
+		c.call("play_intro" if cine == "intro" else "play_ending")
+		c.set("_t", cine_t)
 	if hold_attack:
 		GameInput.touch_attack_held = true
 		if _n == 5:

@@ -10,6 +10,7 @@ var world: Node3D
 var player: CharacterBody3D
 var camera_rig: Node3D
 var hud: CanvasLayer
+var cinematic: Node3D
 
 
 func _ready() -> void:
@@ -31,6 +32,10 @@ func _ready() -> void:
 	hud = HUD_SCENE.instantiate() as CanvasLayer
 	add_child(hud)
 	hud.call("setup", player, world)
+	cinematic = load("res://scripts/cinematic.gd").new()
+	cinematic.name = "Cinematique"
+	add_child(cinematic)
+	cinematic.call("setup", self)
 	_dev_capture()
 
 

@@ -36,6 +36,9 @@ const SLEEP_DIST: float = 60.0
 @export var tint: Color = Color(1, 1, 1)   # teinte "ennemie" (assombrit le modèle)
 ## Ennemi volant (ailes de démon) : vole à la hauteur du joueur et peut le frapper en vol.
 @export var flying: bool = false
+## Boss de région : "" (Roi Squelette), "gardien", "reine", "ombre", "nuages".
+@export var boss_kind: String = ""
+@export var illusion: bool = false          # illusion de la Reine de la forêt
 
 var hp: float = 60.0
 var state: String = "idle"
@@ -53,6 +56,10 @@ var phase: int = 1
 var _special_cd: float = 4.0
 var _ring: MeshInstance3D = null
 var _air_hold: float = 0.0     # maintenu en l'air (combo d'exécution aérienne)
+var _illusions: Array = []
+var _blinks: int = 0           # Seigneur des ombres : frappes éclairs restantes
+var _tele: MeshInstance3D = null
+var _tele_pos: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
@@ -104,7 +111,7 @@ func _attach_weapon() -> void:
 			if g.mesh == null:
 				continue
 			for si in range(g.mesh.get_surface_count()):
-				var base: Material = g.mesh.surface_get_material(si)
+				var base: Material = g.get_active_material(si)
 				if base is StandardMaterial3D:
 					var dm: StandardMaterial3D = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
 					dm.albedo_color = dm.albedo_color * tint
@@ -213,7 +220,15 @@ func _update_bar() -> void:
 
 
 func _play(anim: String, blend: float = 0.15) -> void:
-	if _ap == null or not _ap.has_animation(anim) or _cur_anim == anim:
+	if _ap == null:
+		return
+	if not _ap.has_animation(anim):
+		# les modèles Aventuriers n'ont pas « Idle_Combat » : garde à deux mains ou repos
+		if anim == "Idle_Combat":
+			anim = "2H_Melee_Idle" if _ap.has_animation("2H_Melee_Idle") else "Idle"
+		if not _ap.has_animation(anim) or _cur_anim == anim:
+			return
+	if _cur_anim == anim:
 		return
 	_cur_anim = anim
 	_ap.play(anim, blend)
@@ -255,6 +270,9 @@ func _physics_process(delta: float) -> void:
 		var want_y: float = gh0 + 3.5
 		if state != "idle":
 			want_y = maxf(gh0 + 1.2, player.global_position.y + 0.3)
+		if boss_kind == "nuages":
+			# combat dans les nuages : très haut au repos, au-dessus du héros en combat
+			want_y = gh0 + 40.0 if state == "idle" else maxf(gh0 + 25.0, player.global_position.y + 2.5)
 		want_y += sin(Time.get_ticks_msec() * 0.003 + float(get_instance_id() % 7)) * 0.3
 		velocity.y = clampf((want_y - global_position.y) * 2.5, -8.0, 8.0)
 	elif not is_on_floor():
@@ -271,8 +289,10 @@ func _physics_process(delta: float) -> void:
 		"chase":
 			if player_dead or dist > detect_radius * 1.8:
 				state = "idle"
-			elif is_boss and phase >= 2 and _special_cd <= 0.0 and dist < 9.0:
+			elif is_boss and (boss_kind == "" or boss_kind == "gardien") and phase >= 2 and _special_cd <= 0.0 and dist < 9.0:
 				_start_slam()
+			elif boss_kind != "" and _boss_ai(delta, to_p, dist):
+				pass
 			elif out_of_reach:
 				pass        # il regarde le joueur voler au-dessus de lui, sans pouvoir frapper
 			elif ranged and dist <= 13.0 and dist > attack_range and _cooldown <= 0.0:
@@ -291,6 +311,8 @@ func _physics_process(delta: float) -> void:
 				_face(player.global_position, delta)
 				var dir: Vector3 = Vector3(to_p.x, 0.0, to_p.z).normalized()
 				var keep: float = 9.0 if ranged else attack_range * 0.8
+				if boss_kind == "nuages":
+					keep = 16.0 if phase == 1 else attack_range * 0.8
 				hv = dir * speed if dist > keep else Vector3.ZERO
 				if flying:
 					_play("Jump_Idle" if _ap != null and _ap.has_animation("Jump_Idle") else "Idle_Combat")
@@ -299,11 +321,42 @@ func _physics_process(delta: float) -> void:
 		"attack":
 			if _t < 0.45:
 				_face(player.global_position, delta, 6.0)
+			if boss_kind == "gardien" and _tele == null and not _hit_done:
+				# coup lent et lourd : la zone d'impact s'affiche au sol pendant la préparation
+				_tele_pos = global_position + (-global_transform.basis.z) * 2.6
+				_tele = MeshInstance3D.new()
+				var tor: TorusMesh = TorusMesh.new()
+				tor.inner_radius = 0.85
+				tor.outer_radius = 1.0
+				tor.rings = 32
+				tor.ring_segments = 4
+				_tele.mesh = tor
+				var tm: StandardMaterial3D = StandardMaterial3D.new()
+				tm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				tm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				tm.albedo_color = Color(1.0, 0.15, 0.1, 0.85)
+				_tele.material_override = tm
+				get_parent().add_child(_tele)
+				_tele.global_position = _tele_pos + Vector3(0.0, 0.15, 0.0)
+			if _tele != null and not _hit_done:
+				var kk: float = clampf(_t / hit_time, 0.0, 1.0)
+				_tele.scale = Vector3(3.0 * kk, 0.2, 3.0 * kk)
 			if not _hit_done and _t >= hit_time:
 				_hit_done = true
-				var fwd: Vector3 = -global_transform.basis.z
-				if dist <= attack_range + 0.6 and absf(to_p.y) < 1.6 and fwd.dot(Vector3(to_p.x, 0.0, to_p.z).normalized()) > 0.3:
-					player.call("take_damage", damage, global_position)
+				if boss_kind == "gardien":
+					if _tele != null:
+						_tele.queue_free()
+						_tele = null
+					CombatFx.ring(get_parent(), _tele_pos + Vector3(0.0, 0.2, 0.0), Color(1.0, 0.4, 0.2), 3.0, 0.3)
+					Sfx.play("ulti_boom", 0.7)
+					var pd2: float = Vector2(player.global_position.x - _tele_pos.x, player.global_position.z - _tele_pos.z).length()
+					if pd2 < 3.0 and absf(to_p.y) < 2.0:
+						player.call("take_damage", damage, global_position)
+				else:
+					var fwd: Vector3 = -global_transform.basis.z
+					if dist <= attack_range + 0.6 and absf(to_p.y) < 1.6 and fwd.dot(Vector3(to_p.x, 0.0, to_p.z).normalized()) > 0.3:
+						player.call("take_damage", damage, global_position)
+				pass
 			if _t >= attack_time:
 				state = "chase"
 				_cooldown = 1.1 if not is_boss else 0.6
@@ -315,6 +368,8 @@ func _physics_process(delta: float) -> void:
 			if _t >= 1.2:
 				state = "chase"
 				_cooldown = 2.2
+				if boss_kind == "nuages":
+					_cooldown = [2.2, 3.0, 1.2][clampi(phase - 1, 0, 2)]
 		"slam":
 			_update_slam(delta)
 		"launched":
@@ -351,6 +406,12 @@ func _physics_process(delta: float) -> void:
 func take_damage(amount: float, from_pos: Vector3) -> void:
 	if state == "dead":
 		return
+	if illusion:
+		# fausse Reine : disparaît dans un nuage de feuilles, sans butin
+		CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.2, 0.0), Color(0.4, 1.0, 0.5), 1.5)
+		Sfx.play("teleport", 1.5)
+		queue_free()
+		return
 	hp -= amount
 	var head: Vector3 = global_position + Vector3(0.0, 1.5 * model_scale / 1.3, 0.0)
 	CombatFx.spark(get_parent(), head + Vector3(0.0, -0.3, 0.0), Color(0.45, 0.75, 1.0), 0.9)
@@ -373,8 +434,12 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 			player.call("add_xp", xp_value)
 			CombatFx.number(get_parent(), head + Vector3(0.0, 0.9, 0.0), xp_value, Color(0.5, 1.0, 0.6))
 		died.emit(self)
+		for il in _illusions:
+			if is_instance_valid(il):
+				il.queue_free()
 		if is_boss and player != null and player.has_method("celebrate"):
 			player.call("celebrate")
+			player.call("boss_defeated", boss_kind)
 		return
 	if is_boss:
 		_check_phase()
@@ -431,15 +496,24 @@ func slam_down() -> void:
 func _shoot() -> void:
 	if player == null:
 		return
-	var pr: Node3D = Projectile.new()
-	pr.set("damage", damage)
-	pr.set("color", fire_color)
-	pr.set("world", world)
+	var count: int = 1
+	if boss_kind == "nuages":
+		count = [3, 3, 5][clampi(phase - 1, 0, 2)]
 	var from: Vector3 = global_position + Vector3(0.0, 1.4 * model_scale / 1.3, 0.0)
 	var target: Vector3 = player.global_position + Vector3(0.0, 1.0, 0.0)
-	pr.set("dir", (target - from).normalized())
-	get_parent().add_child(pr)
-	pr.global_position = from
+	var base_dir: Vector3 = (target - from).normalized()
+	for k in range(count):
+		var spread: float = (float(k) - float(count - 1) * 0.5) * 0.16
+		var pr: Node3D = Projectile.new()
+		pr.set("damage", damage)
+		pr.set("color", fire_color)
+		pr.set("world", world)
+		pr.set("hits_flying", flying or is_boss)
+		pr.set("dir", base_dir.rotated(Vector3.UP, spread))
+		if boss_kind == "nuages":
+			pr.set("speed", 16.0)
+		get_parent().add_child(pr)
+		pr.global_position = from
 
 
 func _check_phase() -> void:
@@ -447,12 +521,21 @@ func _check_phase() -> void:
 	var new_phase: int = 3 if r < 0.3 else (2 if r < 0.6 else 1)
 	if new_phase > phase:
 		phase = new_phase
-		speed *= 1.2
-		_summon(2 if phase == 2 else 3)
+		speed *= 1.6 if (boss_kind == "nuages" and phase == 3) else 1.2
 		_special_cd = 1.5
-		if player != null:
-			var hud_msg: String = "Le Roi Squelette appelle ses serviteurs !" if phase == 2 else "Le Roi Squelette entre en furie !"
-			player.emit_signal("announce", hud_msg)
+		if boss_kind == "":
+			_summon(2 if phase == 2 else 3)
+			if player != null:
+				var hud_msg: String = "Le Roi Squelette appelle ses serviteurs !" if phase == 2 else "Le Roi Squelette entre en furie !"
+				player.emit_signal("announce", hud_msg)
+		else:
+			if boss_kind == "nuages" and phase == 2:
+				ranged = true
+				attack_range = 3.5
+			if boss_kind == "reine":
+				_special_cd = 0.2
+			if player != null:
+				player.emit_signal("announce", String(BOSS_NAMES_PHASE[boss_kind][phase - 1]))
 
 
 func _summon(n: int) -> void:
@@ -538,3 +621,101 @@ func _spawn_loot(kind: String, amount: int, off: Vector3) -> void:
 	l.set("amount", amount)
 	get_parent().add_child(l)
 	l.global_position = global_position + off
+
+
+# ================================================================ boss de région
+# boss_kind : "gardien" (Gardien des montagnes), "reine" (Reine de la forêt),
+# "ombre" (Seigneur des ombres), "nuages" (Seigneur des nuages, combat aérien).
+
+const BOSS_NAMES_PHASE: Dictionary = {
+	"gardien": ["", "Le Gardien frappe le sol de rage !", "Le Gardien entre en furie !"],
+	"reine": ["", "La Reine crée des illusions : trouve la vraie !", "La Reine se démultiplie !"],
+	"ombre": ["", "Le Seigneur des ombres imite tes techniques !", "Le Seigneur des ombres devient insaisissable !"],
+	"nuages": ["", "Affrontement : le Seigneur des nuages approche !", "Dernière phase : il devient plus rapide !"],
+}
+
+
+## Comportement spécial du boss pendant la poursuite. Renvoie true s'il a agi cette image.
+func _boss_ai(_delta: float, to_p: Vector3, dist: float) -> bool:
+	match boss_kind:
+		"reine":
+			# se déplace d'un arbre à l'autre (téléportation) et crée des illusions
+			if _special_cd <= 0.0:
+				_special_cd = 5.5 if phase < 3 else 3.5
+				var a: float = randf() * TAU
+				var r: float = randf_range(7.0, 12.0)
+				var dest: Vector3 = player.global_position + Vector3(cos(a) * r, 0.0, sin(a) * r)
+				if world != null:
+					dest.y = float(world.call("ground_height", dest.x, dest.z)) + 0.2
+				CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.2, 0.0), Color(0.4, 1.0, 0.5), 1.4)
+				global_position = dest
+				CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.2, 0.0), Color(0.4, 1.0, 0.5), 1.4)
+				if phase >= 2 and _illusions_alive() == 0:
+					_make_illusions(2 if phase == 2 else 3)
+				return true
+		"ombre":
+			# apparaît derrière le héros et frappe aussitôt (comme sa téléportation)
+			if _special_cd <= 0.0 and dist < 18.0:
+				# enchaînement : en phase 2 et 3, 3 apparitions-frappes rapprochées
+				if _blinks > 0:
+					_blinks -= 1
+				else:
+					_blinks = 2 if phase >= 2 else 0
+				_special_cd = 0.6 if _blinks > 0 else (4.5 if phase == 1 else (3.0 if phase == 2 else 2.0))
+				var back: Vector3 = Vector3(sin(float(player.get("face_yaw"))), 0.0, cos(float(player.get("face_yaw"))))
+				CombatFx.afterimage(get_parent(), global_position, Color(0.5, 0.2, 0.8))
+				var dest2: Vector3 = player.global_position + back * 1.6
+				if world != null:
+					dest2.y = maxf(dest2.y, float(world.call("ground_height", dest2.x, dest2.z)))
+				global_position = dest2
+				_face(player.global_position, 1.0, 999.0)
+				state = "attack"
+				_t = hit_time * 0.6         # attaque rapide : moins de préparation
+				_hit_done = false
+				_cur_anim = ""
+				_play(attack_anim, 0.05)
+				Sfx.play("teleport", 0.7)
+				return true
+		"nuages":
+			# phase 1 : reste à distance et tire ; phase 2 : se rapproche ; phase 3 : plus rapide
+			pass
+	return false
+
+
+func _illusions_alive() -> int:
+	var n: int = 0
+	for e in _illusions:
+		if is_instance_valid(e) and String(e.get("state")) != "dead":
+			n += 1
+	return n
+
+
+## Illusions de la Reine : identiques, fragiles (disparaissent au premier coup), sans butin.
+func _make_illusions(n: int) -> void:
+	_illusions.clear()
+	for k in range(n):
+		var e: CharacterBody3D = load("res://scripts/enemy.gd").new()
+		e.set("model_path", model_path)
+		e.set("keep_props", keep_props)
+		e.set("weapon_path", weapon_path)
+		e.set("tint", tint)
+		e.set("max_hp", 1.0)
+		e.set("damage", damage * 0.4)
+		e.set("speed", speed)
+		e.set("model_scale", model_scale)
+		e.set("display_name", display_name)
+		e.set("attack_anim", attack_anim)
+		e.set("hit_time", hit_time)
+		e.set("attack_time", attack_time)
+		e.set("illusion", true)
+		e.set("xp_value", 0)
+		e.set("world", world)
+		e.set("detect_radius", 40.0)
+		get_parent().add_child(e)
+		var a: float = float(k) / float(n) * TAU + randf()
+		var p: Vector3 = global_position + Vector3(cos(a) * 5.0, 0.0, sin(a) * 5.0)
+		if world != null:
+			p.y = float(world.call("ground_height", p.x, p.z)) + 0.2
+		e.global_position = p
+		_illusions.append(e)
+		CombatFx.spark(get_parent(), p + Vector3(0.0, 1.2, 0.0), Color(0.4, 1.0, 0.5), 1.2)

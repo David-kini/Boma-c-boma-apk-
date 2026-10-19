@@ -11,6 +11,23 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Scénario « Shadow Ninja », étape 2 : boss de région et cinématiques (v0.14)
+- Gardien des montagnes (Pics enneigés) : coups lents et lourds, zone d'impact rouge
+  affichée au sol pendant la préparation, longue récupération (moment pour attaquer).
+- Reine de la forêt (Forêt fantastique) : se téléporte d'un arbre à l'autre, lance des
+  dagues, crée des illusions identiques (elles disparaissent au premier coup).
+- Seigneur des ombres (Bois sombre) : apparaît derrière le héros et frappe ; en phase 2
+  et 3, enchaîne 3 apparitions-frappes ; tirs d'ombre.
+- Seigneur des nuages (au-dessus des Pics) : combat aérien en 3 phases (observation :
+  tirs à distance ; affrontement : se rapproche ; dernière phase : plus rapide).
+- Victoire contre un boss : courte célébration ; les 5 boss vaincus (avec le Roi
+  Squelette) débloquent la cinématique de fin. Progression sauvegardée.
+- Cinématique d'introduction « La chute du royaume » (23 s, passable) au premier
+  lancement ; cinématique de fin (36 s) avec scène supplémentaire ; les deux se revoient
+  depuis le menu.
+- Le Dragon des royaumes (boss final) n'est pas encore fait : il faut un modèle 3D de
+  dragon (pack CC0 « Ultimate Monsters » de Quaternius, à fournir).
+
 ## Scénario « Shadow Ninja », étape 1 : combos, combat aérien, caméra (v0.13)
 - Architecture réutilisable : scripts/combos.gd décrit chaque technique (condition,
   séquence d'entrées, dégâts, portée, recharge, coût) ; player.gd les exécute dans une

@@ -679,6 +679,36 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["arm_r"] = Vector3(0.6, 0.0, 0.5)
 			tg["spine"] = Vector3(-0.1, 0.0, 0.0)
 			tg["coat"] = Vector3(-0.45, 0.0, 0.0)
+		"meditate":
+			# méditation à genoux, tête baissée (cinématique d'introduction)
+			var br2: float = sin(t * 1.5) * 0.02
+			tg["thigh_l"] = Vector3(1.55, 0.0, -0.12)
+			tg["thigh_r"] = Vector3(1.55, 0.0, 0.12)
+			tg["shin_l"] = Vector3(-2.45, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-2.45, 0.0, 0.0)
+			tg["spine"] = Vector3(0.05 + br2, 0.0, 0.0)
+			tg["head"] = Vector3(0.35, 0.0, 0.0)
+			tg["arm_l"] = Vector3(0.5, 0.0, -0.15)
+			tg["fore_l"] = Vector3(0.9, 0.0, 0.0)
+			tg["arm_r"] = Vector3(0.6, 0.0, 0.15)
+			tg["fore_r"] = Vector3(0.9, 0.0, 0.0)
+			tg["hand_r"] = Vector3(1.4, 0.0, 0.0)
+			tg["coat"] = Vector3(0.6, 0.0, 0.0)
+			hy = -0.62
+		"plant":
+			# épée plantée dans le sol, un genou à terre (cinématique de fin)
+			tg["thigh_l"] = Vector3(1.4, 0.0, -0.1)
+			tg["shin_l"] = Vector3(-1.5, 0.0, 0.0)
+			tg["thigh_r"] = Vector3(0.1, 0.0, 0.12)
+			tg["shin_r"] = Vector3(-1.9, 0.0, 0.0)
+			tg["spine"] = Vector3(0.2, 0.0, 0.0)
+			tg["arm_r"] = Vector3(1.1, 0.0, 0.1)
+			tg["fore_r"] = Vector3(0.4, 0.0, 0.0)
+			tg["hand_r"] = Vector3(2.6, 0.0, 0.0)
+			tg["arm_l"] = Vector3(1.0, 0.0, -0.1)
+			tg["fore_l"] = Vector3(0.6, 0.0, 0.0)
+			tg["coat"] = Vector3(0.4, 0.0, 0.0)
+			hy = -0.42
 		"guard":
 			# garde d'épéiste : jambes fléchies et écartées, épée levée au-dessus de l'épaule,
 			# pointe vers l'ennemi, main gauche tendue devant ; léger balancement
