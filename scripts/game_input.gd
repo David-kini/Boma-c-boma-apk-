@@ -18,6 +18,7 @@ var heal_buffer: float = 0.0      # bouton SOIN / touche H
 var shoot_buffer: float = 0.0     # bouton POUVOIR / touche G : pouvoir sélectionné
 var powers_menu_buffer: float = 0.0  # bouton POUVOIRS / touche P : choisir le pouvoir
 var touch_tp_held: bool = false   # bouton TP maintenu : téléportation ciblée
+var touch_attack_held: bool = false  # bouton ATTAQUE maintenu : frappe chargée
 var tp_buffer: float = 0.0        # bouton TP / touche V : téléportation
 var ulti_buffer: float = 0.0      # bouton ULTI / touche U : attaque finale
 var touch_jump_held: bool = false # bouton SAUT maintenu (écran tactile)
@@ -94,6 +95,15 @@ func get_move() -> Vector2:
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	)
 	return v.limit_length(1.0)
+
+
+## Bouton d'attaque maintenu (Frappe du dragon, Frappe du météore en vol).
+func attack_held() -> bool:
+	if touch_attack_held:
+		return true
+	if Input.is_physical_key_pressed(KEY_J) or Input.is_physical_key_pressed(KEY_ENTER):
+		return true
+	return not DisplayServer.is_touchscreen_available() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 
 
 ## Bouton de téléportation maintenu (mode ciblage).

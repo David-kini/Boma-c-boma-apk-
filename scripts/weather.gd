@@ -40,6 +40,7 @@ var _flash: float = 0.0
 var _bolt_t: float = 6.0
 var _thunder_delay: float = -1.0
 var forced: bool = false
+var _dim: float = 0.0             # assombrissement temporaire (Éclipse du dragon)
 
 
 func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial) -> void:
@@ -71,6 +72,10 @@ func set_weather(w: String, instant: bool = false) -> void:
 
 func weather_name() -> String:
 	return String(PRESETS[current]["name"])
+
+
+func dim(v: float) -> void:
+	_dim = clampf(v, 0.0, 0.9)
 
 
 ## Éclair : flash du ciel et de la lumière ambiante (aussi utilisé par l'attaque finale).
@@ -152,9 +157,9 @@ func _process(delta: float) -> void:
 
 func _apply(c: Dictionary) -> void:
 	if sun != null:
-		sun.light_energy = float(c["sun"]) * (1.0 + _flash * 1.5)
+		sun.light_energy = float(c["sun"]) * (1.0 + _flash * 1.5) * (1.0 - _dim)
 	if env != null:
-		env.ambient_light_energy = float(c["amb"]) + _flash * 1.2
+		env.ambient_light_energy = (float(c["amb"]) + _flash * 1.2) * (1.0 - _dim * 0.7)
 		env.fog_density = GameSettings.fog_density() * float(c["fog"])
 		env.fog_light_color = c["fogc"]
 		if env.background_mode == Environment.BG_COLOR:

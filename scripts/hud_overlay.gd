@@ -52,6 +52,7 @@ func _reset() -> void:
 	GameInput.touch_move = Vector2.ZERO
 	GameInput.touch_jump_held = false
 	GameInput.touch_tp_held = false
+	GameInput.touch_attack_held = false
 
 
 func _input(event: InputEvent) -> void:
@@ -139,6 +140,7 @@ func _touch_drag(idx: int, pos: Vector2, rel: Vector2) -> void:
 func _process(_delta: float) -> void:
 	GameInput.touch_jump_held = bool(pressed.get("jump", false))
 	GameInput.touch_tp_held = bool(pressed.get("tp", false))
+	GameInput.touch_attack_held = bool(pressed.get("attack", false))
 	if enabled:
 		queue_redraw()
 

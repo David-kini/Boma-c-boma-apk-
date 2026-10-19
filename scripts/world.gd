@@ -40,6 +40,12 @@ func _ready() -> void:
 	weather.call("setup", env, sun, sky_mat)
 
 
+## Baisse de la lumière (0 = normale) : Éclipse du dragon.
+func dim(v: float) -> void:
+	if weather != null:
+		weather.call("dim", v)
+
+
 ## Flash d'éclair (attaque finale, orage).
 func flash(strength: float) -> void:
 	if weather != null:

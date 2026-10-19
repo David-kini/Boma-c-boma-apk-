@@ -452,6 +452,14 @@ func _build_settings() -> void:
 	weapon_button.add_theme_font_size_override("font_size", 20)
 	weapon_button.pressed.connect(_on_weapon_button)
 	vb.add_child(weapon_button)
+	var camfx: Button = Button.new()
+	camfx.custom_minimum_size = Vector2(380.0, 36.0)
+	camfx.add_theme_font_size_override("font_size", 17)
+	camfx.text = "Effets de caméra : " + ("normaux" if GameSettings.cam_fx else "réduits")
+	camfx.pressed.connect(func() -> void:
+		GameSettings.set_cam_fx(not GameSettings.cam_fx)
+		camfx.text = "Effets de caméra : " + ("normaux" if GameSettings.cam_fx else "réduits"))
+	vb.add_child(camfx)
 	var pw: Button = Button.new()
 	pw.text = "Pouvoirs…"
 	pw.custom_minimum_size = Vector2(380.0, 40.0)

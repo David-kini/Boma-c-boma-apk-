@@ -25,6 +25,7 @@ const Weapons = preload("res://scripts/weapons.gd")
 const SaveGame = preload("res://scripts/save_game.gd")
 const PlayerShot = preload("res://scripts/player_shot.gd")
 const Powers = preload("res://scripts/powers.gd")
+const Combos = preload("res://scripts/combos.gd")
 
 ## Combo : durée (s), instant du coup (fraction), dégâts, portée (m), angle (cos mini,
 ## -1 = tout autour), élan vers l'avant (m/s)
@@ -68,6 +69,8 @@ const ZONE_RADIUS: float = 5.0
 const TP_AIM_RANGE: float = 18.0
 const TP_STRIKE_RADIUS: float = 4.0
 const ULTI_RADIUS: float = 10.0
+const METEOR_RADIUS: float = 4.5
+const ECLIPSE_RADIUS: float = 7.0
 
 var cam: Node3D = null
 var world: Node3D = null
@@ -171,6 +174,14 @@ var _aim_dest: Vector3 = Vector3.ZERO
 var _aim_target: Node3D = null
 var _aim_ring: MeshInstance3D = null
 var _aim_mark: MeshInstance3D = null
+# --- techniques (machine à états « action »)
+var action: String = ""
+var _act_t: float = 0.0
+var _act: Dictionary = {}
+var _hist: Array = []
+var _tech_cd: Dictionary = {}
+var _charge_t: float = 0.0
+var _air_press: bool = false
 
 
 func _ready() -> void:
@@ -305,6 +316,9 @@ func _physics_process(delta: float) -> void:
 	if ulti_t >= 0.0 and not is_dead:
 		_process_ulti(delta)
 		return
+	if action != "" and not is_dead:
+		_process_action(delta, on_floor, wish, has_input)
+		return
 	if is_dead:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -319,13 +333,55 @@ func _physics_process(delta: float) -> void:
 	if GameInput.attack_buffer > 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
 		if _atk_i < 0 and not _plunge:
 			GameInput.consume_attack()
-			if not on_floor and not is_flying and global_position.y - _ground_h() > 2.5:
+			_push_input("A")
+			var seq: String = Combos.match_sequence(_hist, Time.get_ticks_msec())
+			var air_t: Node3D = null if on_floor or is_flying else _aerial_target()
+			if is_flying:
+				# en vol : appui court = Dragon céleste, maintenu = Frappe du météore
+				_air_press = true
+				_charge_t = 0.0
+			elif seq == "tempete" and _tech_ready("tempete") and _nearest_enemy(8.0) != null:
+				_start_action("tempete", {"target": _nearest_enemy(8.0)})
+				_hist.clear()
+				return
+			elif air_t != null and _tech_ready("aerienne"):
+				_start_action("aerienne", {"target": air_t})
+				return
+			elif not on_floor and not is_flying and global_position.y - _ground_h() > 2.5:
 				_start_plunge()
 			else:
 				_start_attack(_combo_next)
 		elif _atk_t > _dur(_atk_i) * 0.35:
 			GameInput.consume_attack()
+			_push_input("A")
 			_atk_queued = true
+	# attaque en vol (décidée au relâchement ou après 0,35 s de maintien)
+	if _air_press:
+		if not is_flying:
+			_air_press = false
+		elif GameInput.attack_held():
+			_charge_t += delta
+			if _charge_t > 0.35:
+				_air_press = false
+				if _tech_ready("meteore"):
+					_start_action("meteore")
+					return
+		else:
+			_air_press = false
+			var tgc: Node3D = _nearest_enemy(12.0)
+			if tgc != null and _tech_ready("celeste"):
+				_start_action("celeste", {"target": tgc})
+				return
+			_start_attack(_combo_next)
+	# Frappe du dragon : ATTAQUE maintenue au sol
+	if on_floor and not is_flying and GameInput.attack_held() and not _air_press:
+		_charge_t += delta
+		if _charge_t > 0.35 and _tech_ready("dragon"):
+			_charge_t = 0.0
+			_start_action("charge")
+			return
+	elif not _air_press:
+		_charge_t = 0.0
 	if _atk_i >= 0:
 		_process_attack(delta)
 	# attaque à distance, téléportation, attaque finale
@@ -363,6 +419,7 @@ func _physics_process(delta: float) -> void:
 				_teleport_aimed()
 			else:
 				_teleport(facing)
+				_push_input("T")
 	if GameInput.ulti_buffer > 0.0:
 		GameInput.ulti_buffer = 0.0
 		if ulti >= ULTI_MAX:
@@ -381,6 +438,11 @@ func _physics_process(delta: float) -> void:
 	if GameInput.dodge_buffer > 0.0 and _dodge_cd <= 0.0 and _dodge_t <= 0.0 \
 			and _land_t <= 0.0 and (on_floor or _coyote > 0.0):
 		GameInput.consume_dodge()
+		_push_input("D")
+		if Combos.match_sequence(_hist, Time.get_ticks_msec()) == "fantome" and _tech_ready("fantome") and _nearest_enemy(10.0) != null:
+			_hist.clear()
+			_start_action("fantome")
+			return
 		_end_attack()
 		_dodge_t = DODGE_TIME
 		_dodge_cd = DODGE_COOLDOWN
@@ -561,6 +623,18 @@ func _start_attack(i: int) -> void:
 	if w != null:
 		w.set("trail_on", true)
 	Sfx.play("swing", 1.0 + 0.08 * float(i))
+	# Danse de l'épée : léger mouvement latéral de caméra sur les 2 premiers coups,
+	# le 2e coup pivote vers un ennemi situé derrière
+	if cam != null and i < 2:
+		cam.call("lateral", 0.35 if i == 0 else -0.35, 0.3)
+	if i == 1:
+		var back: Vector3 = Vector3(sin(face_yaw), 0.0, cos(face_yaw))
+		for en in _enemies_near(global_position, 4.0):
+			var de: Vector3 = en.global_position - global_position
+			de.y = 0.0
+			if de.normalized().dot(back) > 0.4:
+				face_yaw = atan2(-de.x, -de.z)
+				break
 	# acrobaties : coup sauté, salto du coup final, suspension pendant les coups aériens
 	if is_on_floor():
 		if i == 2:
@@ -597,6 +671,8 @@ func _process_attack(delta: float) -> void:
 	elif not _atk_hit and _atk_t >= dur * float(a["hit"]):
 		_atk_hit = true
 		_deal_hits(a)
+		if _atk_i == 2 and cam != null:
+			cam.call("slow_mo", 0.14, 0.4)       # frappe verticale finale de la Danse de l'épée
 	if _atk_t >= dur:
 		var queued: bool = _atk_queued
 		var nxt: int = (_atk_i + 1) % ATTACKS.size()
@@ -671,6 +747,10 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 	if hp <= 0.0:
 		is_dead = true
 		_dead_t = 3.0
+		if action != "":
+			_end_action()
+		if cam != null:
+			cam.call("defeat", true)
 		_stop_fly()
 		_stop_divine()
 		combo_count = 0
@@ -686,6 +766,8 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 
 func _respawn() -> void:
 	is_dead = false
+	if cam != null:
+		cam.call("defeat", false)
 	hp = max_hp
 	hp_changed.emit(hp, max_hp)
 	if world != null:
@@ -708,6 +790,8 @@ func _update_powers(delta: float) -> void:
 	_fly_cd -= delta
 	_shot_cd -= delta
 	_tp_cd -= delta
+	for k in _tech_cd:
+		_tech_cd[k] = float(_tech_cd[k]) - delta
 	power_cd = maxf(power_cd - delta, 0.0)
 	if _tp_window > 0.0:
 		_tp_window -= delta
@@ -1163,19 +1247,16 @@ func add_ulti(v: float) -> void:
 ## Attaque finale : le héros s'élève, puis 4 vagues d'éclairs frappent tous les ennemis
 ## à moins de 16 m, et une onde de choc termine l'attaque.
 func _start_ulti() -> void:
-	_end_attack()
+	# l'attaque finale est maintenant l'Éclipse du dragon (combos.gd)
 	_stop_fly()
 	ulti = 0.0
 	ulti_changed.emit(ulti)
-	ulti_t = 0.0
-	_ulti_strikes = 0
-	_ulti_y = global_position.y
-	invulnerable = true
-	velocity = Vector3.ZERO
-	announce.emit("JUGEMENT DE LA FOUDRE !")
+	_start_action("eclipse")
+	if cam != null:
+		cam.call("orbit", 0.75, 2.2)
 	Sfx.play("ulti_charge")
-	# la zone de l'attaque finale s'affiche au sol dès le début
-	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), Color(1.0, 0.85, 0.4, 0.9), ULTI_RADIUS, 0.6)
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), Color(1.0, 0.85, 0.4, 0.9), ECLIPSE_RADIUS, 0.75)
+
 
 
 func _process_ulti(delta: float) -> void:
@@ -1286,6 +1367,10 @@ func set_power(i: int) -> void:
 
 ## Déclenche le pouvoir choisi (bouton POUVOIR / touche G).
 func use_power(facing: Vector3) -> void:
+	if is_flying and _tech_ready("pluie"):
+		if not _enemies_near(global_position, 12.0, 14.0).is_empty():
+			_start_action("pluie")
+			return
 	if power_cd > 0.0:
 		return
 	var d: Dictionary = Powers.get_def(power_index)
@@ -1647,3 +1732,514 @@ func _teleport_aimed() -> void:
 	Sfx.play("ulti_boom", 1.7)
 	if cam != null:
 		cam.call("shake", 0.45)
+
+
+# ================================================================ techniques (combos.gd)
+# Machine à états « action » : une seule technique exclusive à la fois (charge, frappe du
+# dragon, tempête ninja, exécution aérienne, fantôme, dragon céleste, pluie de lames,
+# météore, éclipse, célébration). Pendant une action, la marche, le saut, l'esquive et
+# les autres attaques sont bloqués ; certaines actions peuvent être interrompues par ESQ.
+
+func _push_input(letter: String) -> void:
+	_hist.append([letter, Time.get_ticks_msec()])
+	if _hist.size() > 6:
+		_hist.pop_front()
+
+
+func _tech_ready(id: String) -> bool:
+	return float(_tech_cd.get(id, 0.0)) <= 0.0
+
+
+func _tech_used(id: String) -> void:
+	var d: Dictionary = Combos.get_def(id)
+	_tech_cd[id] = float(d.get("cd", 0.0))
+
+
+func _tdmg(id: String) -> float:
+	return float(Combos.get_def(id).get("dmg", 10.0)) * _dmg_mult()
+
+
+func _start_action(id: String, data: Dictionary = {}) -> void:
+	_end_attack()
+	action = id
+	_act_t = 0.0
+	_act = data
+	_act["step"] = 0
+	_tech_used(id)
+	var d: Dictionary = Combos.get_def(id)
+	if not d.is_empty() and id != "celebrate":
+		announce.emit(String(d["name"]))
+
+
+func _end_action() -> void:
+	action = ""
+	_act = {}
+	invulnerable = false
+	_hide_aim()
+
+
+func _strike(en: Node3D, dmg: float, from: Vector3, col: Color) -> void:
+	if en == null or not is_instance_valid(en) or String(en.get("state")) == "dead":
+		return
+	en.call("take_damage", dmg, from)
+	CombatFx.spark(get_parent(), en.global_position + Vector3(0.0, 1.0, 0.0), col, 1.1)
+	on_ranged_hit()
+
+
+func _enemies_near(pos: Vector3, r: float, max_dy: float = 3.0) -> Array:
+	var out: Array = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var dd: float = Vector2(en.global_position.x - pos.x, en.global_position.z - pos.z).length()
+		if dd < r and absf(en.global_position.y - pos.y) < max_dy:
+			out.append(en)
+	return out
+
+
+## Onde de choc limitée à la zone : dégâts plus forts au centre, recul optionnel.
+func _shockwave(pos: Vector3, r: float, dmg: float, push: float, col: Color) -> int:
+	CombatFx.ring(get_parent(), pos + Vector3(0.0, 0.15, 0.0), col, r, 0.35)
+	CombatFx.ring(get_parent(), pos + Vector3(0.0, 0.3, 0.0), Color(1, 1, 1, 0.8), r * 0.6, 0.25)
+	var n: int = 0
+	for en in _enemies_near(pos, r):
+		var dd: float = Vector2(en.global_position.x - pos.x, en.global_position.z - pos.z).length()
+		en.call("take_damage", dmg * lerpf(1.4, 0.6, dd / r), pos)
+		if push > 0.0:
+			en.call("knockback", en.global_position - pos, push)
+		n += 1
+	if n > 0:
+		on_ranged_hit()
+	return n
+
+
+func _face_to(p: Vector3) -> void:
+	var d: Vector3 = p - global_position
+	if Vector2(d.x, d.z).length() > 0.05:
+		face_yaw = atan2(-d.x, -d.z)
+		rig.rotation.y = face_yaw
+
+
+func _set_pose(kind: int, dur: float) -> void:
+	_pose_kind = kind
+	_pose_dur = dur
+	_pose_t = dur
+
+
+func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: bool) -> void:
+	_act_t += delta
+	var t: float = _act_t
+	var col: Color = _weapon_color()
+	var step: int = int(_act.get("step", 0))
+	match action:
+		"charge":
+			# Frappe du dragon : posture, énergie qui se concentre, caméra qui se rapproche
+			velocity.x = 0.0
+			velocity.z = 0.0
+			state = "guard"
+			if cam != null:
+				cam.call("zoom_pulse", lerpf(1.0, 0.68, clampf(t / 0.6, 0.0, 1.0)), 0.2)
+			if fmod(t, 0.09) < delta:
+				var a: float = t * 9.0
+				var hand: Vector3 = global_position + Vector3(cos(a) * 0.5, 1.4 + sin(t * 5.0) * 0.3, sin(a) * 0.5)
+				CombatFx.spark(get_parent(), hand, col, 0.18 + 0.22 * clampf(t / 0.6, 0.0, 1.0))
+			if GameInput.dodge_buffer > 0.0:
+				_end_action()
+				return
+			if not GameInput.attack_held():
+				if t >= 0.45:
+					var tg: Node3D = _nearest_enemy(9.0)
+					action = "dragon_rush"
+					_act_t = 0.0
+					_act = {"target": tg, "step": 0, "from": global_position}
+					Sfx.play("teleport", 0.7)
+				else:
+					_end_action()
+				return
+			move_and_slide()
+		"dragon_rush":
+			var tg2: Node3D = _act.get("target", null)
+			invulnerable = true
+			if step == 0:
+				var dir: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
+				if tg2 != null and is_instance_valid(tg2):
+					dir = tg2.global_position - global_position
+					dir.y = 0.0
+					_face_to(tg2.global_position)
+				var close: bool = tg2 != null and is_instance_valid(tg2) and Vector2(dir.x, dir.z).length() < 1.7
+				if close or t > 0.32 or tg2 == null:
+					_act["step"] = 1
+					_set_pose(2, 0.35)
+					if tg2 != null:
+						_strike(tg2, _tdmg("dragon"), global_position, col)
+					_shockwave(global_position + Vector3(-sin(face_yaw), 0.0, -cos(face_yaw)) * 1.2, 3.0, _tdmg("dragon") * 0.4, 6.0, col)
+					Sfx.play("ulti_boom", 1.4)
+					if cam != null:
+						cam.call("shake", 0.4)
+						cam.call("slow_mo", 0.12, 0.4)
+					_act_t = 0.0
+				else:
+					var v: Vector3 = dir.normalized() * 34.0
+					velocity = Vector3(v.x, velocity.y, v.z)
+					state = "longjump"
+					if fmod(t, 0.05) < delta:
+						CombatFx.afterimage(get_parent(), global_position, col)
+			else:
+				velocity.x = 0.0
+				velocity.z = 0.0
+				state = "attack"
+				if t > 0.3:
+					_end_action()
+			move_and_slide()
+		"tempete":
+			# Tempête ninja : téléportation derrière l'ennemi, 4 frappes rapides, recul final
+			invulnerable = true
+			velocity = Vector3.ZERO
+			state = "attack"
+			var tg3: Node3D = _act.get("target", null)
+			if step == 0:
+				if tg3 != null:
+					var away: Vector3 = tg3.global_position - global_position
+					away.y = 0.0
+					CombatFx.afterimage(get_parent(), global_position, col)
+					global_position = _safe_dest(tg3.global_position + away.normalized() * 1.3)
+					_face_to(tg3.global_position)
+					Sfx.play("teleport", 1.2)
+				_act["step"] = 1
+			elif step <= 4 and t >= 0.12 * float(step):
+				_set_pose([0, 1, 0, 1][step - 1], 0.12)
+				Sfx.play("swing", 1.3 + 0.05 * float(step))
+				_strike(tg3, _tdmg("tempete"), global_position, col)
+				_act["step"] = step + 1
+			elif step == 5 and t >= 0.66:
+				_set_pose(3, 0.3)
+				_strike(tg3, _tdmg("tempete") * 2.0, global_position, col)
+				for en in _enemies_near(global_position, 3.5):
+					en.call("knockback", en.global_position - global_position, 12.0)
+				Sfx.play("hit", 0.8)
+				if cam != null:
+					cam.call("shake", 0.3)
+				_act["step"] = 6
+			elif step == 6 and t >= 0.9:
+				_end_action()
+				return
+			move_and_slide()
+		"aerienne":
+			# Exécution aérienne : frappe ascendante, 2 frappes en l'air, coup descendant
+			var tg4: Node3D = _act.get("target", null)
+			if GameInput.dodge_buffer > 0.0:
+				_end_action()
+				return
+			invulnerable = true
+			state = "attack"
+			velocity.x = 0.0
+			velocity.z = 0.0
+			if step == 0:
+				_set_pose(2, 0.35)
+				_strike(tg4, _tdmg("aerienne"), global_position, col)
+				if tg4 != null and is_instance_valid(tg4):
+					tg4.call("launch", 10.0)
+				velocity.y = 10.5
+				Sfx.play("swing", 0.9)
+				_act["step"] = 1
+			elif step == 1 and t >= 0.42:
+				if tg4 != null and is_instance_valid(tg4):
+					tg4.call("air_hold", 0.55)
+					# rejoint la cible en l'air
+					var side: Vector3 = (global_position - tg4.global_position)
+					side.y = 0.0
+					global_position = tg4.global_position + side.normalized() * 1.2
+					_face_to(tg4.global_position)
+				velocity.y = 0.0
+				_set_pose(0, 0.15)
+				_strike(tg4, _tdmg("aerienne"), global_position, col)
+				Sfx.play("swing", 1.2)
+				_act["step"] = 2
+			elif step == 2:
+				velocity.y = 0.0
+				if t >= 0.6:
+					_set_pose(1, 0.15)
+					_strike(tg4, _tdmg("aerienne"), global_position, col)
+					Sfx.play("swing", 1.3)
+					_act["step"] = 3
+			elif step == 3:
+				velocity.y = 0.0
+				if t >= 0.8:
+					_set_pose(4, 0.4)
+					_strike(tg4, _tdmg("aerienne") * 1.6, global_position, col)
+					if tg4 != null and is_instance_valid(tg4):
+						tg4.call("slam_down")
+					velocity.y = -18.0
+					_act["step"] = 4
+			elif step == 4:
+				velocity.y = -18.0
+				if is_on_floor() or t > 1.6:
+					_shockwave(global_position, 2.5, _tdmg("aerienne"), 0.0, col)
+					if cam != null:
+						cam.call("shake", 0.35)
+					_end_action()
+					return
+			move_and_slide()
+		"fantome":
+			# Fantôme des ténèbres : 4 apparitions, une frappe à chacune, la dernière repousse
+			invulnerable = true
+			velocity = Vector3.ZERO
+			state = "attack"
+			if step < 4 and t >= 0.22 * float(step):
+				var best: Node3D = null
+				var best_d: float = 10.0
+				for e in get_tree().get_nodes_in_group("enemies"):
+					var en: Node3D = e as Node3D
+					if en == null or String(en.get("state")) == "dead":
+						continue
+					var dd: float = en.global_position.distance_to(global_position) + (5.0 if en == _tp_last else 0.0)
+					if dd < best_d:
+						best_d = dd
+						best = en
+				if best == null:
+					_end_action()
+					return
+				CombatFx.afterimage(get_parent(), global_position, Color(0.4, 0.2, 0.7))
+				var ang: float = float(step) * 2.1
+				global_position = _safe_dest(best.global_position + Vector3(cos(ang), 0.0, sin(ang)) * 1.3)
+				_face_to(best.global_position)
+				_tp_last = best
+				_set_pose(step % 4, 0.2)
+				Sfx.play("teleport", 1.4)
+				if step < 3:
+					_strike(best, _tdmg("fantome"), global_position, Color(0.6, 0.3, 1.0))
+				else:
+					_strike(best, _tdmg("fantome") * 1.5, global_position, Color(0.6, 0.3, 1.0))
+					for en2 in _enemies_near(global_position, 3.5):
+						en2.call("knockback", en2.global_position - global_position, 11.0)
+					CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.2, 0.0), Color(0.6, 0.3, 1.0), 3.5, 0.3)
+				_act["step"] = step + 1
+				if step + 1 >= 4:
+					_act["end"] = t + 0.3
+			if _act.has("end") and t >= float(_act["end"]):
+				_end_action()
+				return
+			move_and_slide()
+		"celeste":
+			# Dragon céleste (en vol) : frappe diagonale, projection, pivot, seconde frappe
+			var tg5: Node3D = _act.get("target", null)
+			invulnerable = true
+			state = "attack"
+			if tg5 == null or not is_instance_valid(tg5) or String(tg5.get("state")) == "dead":
+				_end_action()
+				return
+			var to_t: Vector3 = tg5.global_position + Vector3(0.0, 0.8, 0.0) - (global_position + Vector3(0.0, 0.9, 0.0))
+			if step == 0 or step == 2:
+				if to_t.length() < 1.6 or t > 0.4:
+					_set_pose(1 if step == 0 else 2, 0.25)
+					_strike(tg5, _tdmg("celeste") * (1.0 if step == 0 else 0.8), global_position, col)
+					var side2: Vector3 = Vector3(-to_t.z, 0.0, to_t.x).normalized() * (1.0 if step == 0 else -1.0)
+					tg5.call("knockback", side2, 7.0)
+					Sfx.play("swing", 1.1)
+					if cam != null:
+						cam.call("shake", 0.2)
+					_act["step"] = step + 1
+					_act_t = 0.0
+					velocity = Vector3.ZERO
+				else:
+					velocity = to_t.normalized() * 30.0
+					_face_to(tg5.global_position)
+			elif step == 1:
+				# pivot en plein vol
+				velocity = Vector3.ZERO
+				face_yaw += delta * 14.0
+				if t > 0.3:
+					_act["step"] = 2
+					_act_t = 0.0
+			else:
+				_end_action()
+				return
+			move_and_slide()
+		"pluie":
+			# Pluie de lames (en vol) : immobile, marque les cibles, les frappe, finit en piqué
+			invulnerable = true
+			velocity = Vector3.ZERO
+			state = "attack"
+			var marks: Array = _act.get("marks", [])
+			if step == 0:
+				var targets: Array = _enemies_near(global_position, 12.0, 14.0)
+				targets = targets.slice(0, 6)
+				_act["targets"] = targets
+				for en in targets:
+					var mk: MeshInstance3D = MeshInstance3D.new()
+					var cone: CylinderMesh = CylinderMesh.new()
+					cone.top_radius = 0.4
+					cone.bottom_radius = 0.0
+					cone.height = 0.6
+					cone.radial_segments = 4
+					mk.mesh = cone
+					var mm: StandardMaterial3D = StandardMaterial3D.new()
+					mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+					mm.albedo_color = Color(1.0, 0.3, 0.25)
+					mm.no_depth_test = true
+					mk.material_override = mm
+					en.add_child(mk)
+					mk.position = Vector3(0.0, 3.0, 0.0)
+					marks.append(mk)
+				_act["marks"] = marks
+				_act["step"] = 1
+				Sfx.play("ulti_charge", 1.5)
+			else:
+				var targets2: Array = _act.get("targets", [])
+				var idx: int = step - 1
+				if t >= 0.3 + 0.18 * float(idx) and idx < targets2.size():
+					var en3: Node3D = targets2[idx]
+					if is_instance_valid(en3) and String(en3.get("state")) != "dead":
+						CombatFx.afterimage(get_parent(), global_position, col)
+						var ang2: float = float(idx) * 2.4
+						global_position = en3.global_position + Vector3(cos(ang2) * 1.3, 0.6, sin(ang2) * 1.3)
+						_face_to(en3.global_position)
+						_set_pose(idx % 4, 0.18)
+						_strike(en3, _tdmg("pluie"), global_position, col)
+						Sfx.play("swing", 1.2 + 0.05 * float(idx))
+					_act["step"] = step + 1
+				elif idx >= targets2.size() and t >= 0.3 + 0.18 * float(idx) + 0.1:
+					for mk2 in marks:
+						if is_instance_valid(mk2):
+							mk2.queue_free()
+					_end_action()
+					_stop_fly()
+					global_position.y += 2.0
+					_start_plunge()
+					return
+			move_and_slide()
+		"meteore":
+			# Frappe du météore : montée, visée d'une zone au sol, plongeon, onde limitée à la zone
+			state = "guard" if step == 0 else "plunge"
+			if step == 0:
+				var want_y: float = float(_act.get("y0", global_position.y)) + 6.0
+				velocity = Vector3(0.0, clampf((want_y - global_position.y) * 4.0, -4.0, 14.0), 0.0)
+				if not _act.has("aim"):
+					_act["y0"] = global_position.y
+					var tg6: Node3D = _nearest_enemy(16.0)
+					var aim0: Vector3 = global_position + Vector3(-sin(face_yaw), 0.0, -cos(face_yaw)) * 8.0
+					if tg6 != null:
+						aim0 = tg6.global_position
+					_act["aim"] = aim0
+					_build_aim_markers()
+				var aim: Vector3 = _act["aim"]
+				if has_input:
+					aim += wish.normalized() * 12.0 * delta
+				aim.y = _ground_at(aim)
+				_act["aim"] = aim
+				_aim_ring.visible = true
+				_aim_ring.scale = Vector3(METEOR_RADIUS / TP_STRIKE_RADIUS, 0.2, METEOR_RADIUS / TP_STRIKE_RADIUS)
+				_aim_ring.global_position = aim + Vector3(0.0, 0.15, 0.0)
+				if cam != null:
+					cam.call("zoom_pulse", 0.8, 0.2)
+				if fmod(t, 0.08) < delta:
+					CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.5, 0.0), col, 0.5)
+				if not GameInput.attack_held() and t > 0.25:
+					_act["step"] = 1
+					_act_t = 0.0
+					_stop_fly()
+					_glide = false
+					invulnerable = true
+					if cam != null:
+						cam.call("dive", 0.7)
+					Sfx.play("swing", 0.6)
+				move_and_slide()
+			else:
+				var aim2: Vector3 = _act["aim"]
+				var to_a: Vector3 = aim2 - global_position
+				velocity = to_a.normalized() * 34.0
+				_face_to(aim2)
+				move_and_slide()
+				if is_on_floor() or to_a.length() < 1.0 or t > 1.5:
+					_aim_ring.visible = false
+					_aim_ring.scale = Vector3(1.0, 0.2, 1.0)
+					_shockwave(global_position, METEOR_RADIUS, _tdmg("meteore"), 7.0, col)
+					Sfx.play("ulti_boom", 1.1)
+					if cam != null:
+						cam.call("shake", 0.5)
+						cam.call("slow_mo", 0.15, 0.35)
+					_land_t = 0.15
+					_end_action()
+					return
+		"eclipse":
+			# Éclipse du dragon : épée levée, lumière qui baisse, téléportation au-dessus de la
+			# cible principale, frappe descendante, onde de lumière qui repousse
+			invulnerable = true
+			if step == 0:
+				state = "attack"
+				velocity = Vector3.ZERO
+				if world != null and world.has_method("dim"):
+					world.call("dim", clampf(t / 0.5, 0.0, 1.0) * 0.55)
+				if fmod(t, 0.06) < delta:
+					var a2: float = t * 12.0
+					CombatFx.spark(get_parent(), global_position + Vector3(cos(a2) * 0.45, 2.3 + sin(t * 7.0) * 0.2, sin(a2) * 0.45),
+						Color(1.0, 0.85, 0.4), 0.45)
+				if t >= 0.75:
+					var tg7: Node3D = _nearest_enemy(15.0)
+					var above: Vector3 = global_position + Vector3(0.0, 6.0, 0.0)
+					if tg7 != null:
+						above = tg7.global_position + Vector3(0.0, 6.0, 0.0)
+					CombatFx.afterimage(get_parent(), global_position, Color(1.0, 0.85, 0.4))
+					global_position = above
+					_act["step"] = 1
+					_act_t = 0.0
+					Sfx.play("teleport", 0.9)
+				move_and_slide()
+			elif step == 1:
+				state = "plunge"
+				velocity = Vector3(0.0, -30.0, 0.0)
+				move_and_slide()
+				if is_on_floor() or t > 1.0:
+					var gold: Color = Color(1.0, 0.85, 0.4)
+					_shockwave(global_position, ECLIPSE_RADIUS, _tdmg("eclipse"), 12.0, gold)
+					CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.5, 0.0), Color(1, 1, 1, 0.9), ECLIPSE_RADIUS * 1.2, 0.5)
+					CombatFx.bolt(get_parent(), global_position + Vector3(0.0, 25.0, 0.0), global_position, gold, 0.6)
+					Sfx.play("ulti_boom")
+					Sfx.play("thunder", 1.4)
+					if cam != null:
+						cam.call("shake", 0.55)
+						cam.call("slow_mo", 0.18, 0.35)
+					if world != null and world.has_method("flash"):
+						world.call("flash", 0.7)
+					_act["step"] = 2
+					_act_t = 0.0
+			else:
+				state = "land"
+				velocity = Vector3.ZERO
+				if world != null and world.has_method("dim"):
+					world.call("dim", maxf(0.55 - t * 1.5, 0.0))
+				move_and_slide()
+				if t > 0.4:
+					if world != null and world.has_method("dim"):
+						world.call("dim", 0.0)
+					_end_action()
+					return
+		"celebrate":
+			state = "attack"
+			velocity = Vector3.ZERO
+			move_and_slide()
+			if t > 1.8:
+				_end_action()
+				return
+		_:
+			_end_action()
+	_update_blob()
+
+
+## Victoire contre un boss : courte célébration (épée levée, caméra qui tourne).
+func celebrate() -> void:
+	if is_dead:
+		return
+	_start_action("celebrate")
+	announce.emit("VICTOIRE !")
+	Sfx.play("levelup", 0.9)
+	if cam != null:
+		cam.call("orbit", 1.8, 1.4)
+
+
+func _aerial_target() -> Node3D:
+	for en in _enemies_near(global_position, 3.6, 2.6):
+		if not bool(en.get("is_boss")) and not bool(en.get("flying")):
+			return en
+	return null

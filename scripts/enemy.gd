@@ -52,6 +52,7 @@ var _cur_anim: String = ""
 var phase: int = 1
 var _special_cd: float = 4.0
 var _ring: MeshInstance3D = null
+var _air_hold: float = 0.0     # maintenu en l'air (combo d'exécution aérienne)
 
 
 func _ready() -> void:
@@ -242,7 +243,13 @@ func _physics_process(delta: float) -> void:
 		return
 	if _ap != null and not _ap.is_playing() and state != "dead":
 		_ap.play()
-	if flying and state != "dead":
+	if state == "launched":
+		if _air_hold > 0.0:
+			_air_hold -= delta
+			velocity.y = 0.0
+		else:
+			velocity.y -= GRAVITY * delta
+	elif flying and state != "dead":
 		# vol : reste à 3,5 m du sol au repos, suit l'altitude du joueur en poursuite
 		var gh0: float = float(world.call("ground_height", global_position.x, global_position.z)) if world != null else 0.0
 		var want_y: float = gh0 + 3.5
@@ -310,6 +317,13 @@ func _physics_process(delta: float) -> void:
 				_cooldown = 2.2
 		"slam":
 			_update_slam(delta)
+		"launched":
+			# projeté en l'air : sans défense jusqu'à retomber
+			velocity.x = move_toward(velocity.x, 0.0, 6.0 * delta)
+			velocity.z = move_toward(velocity.z, 0.0, 6.0 * delta)
+			if _t > 0.35 and is_on_floor() and _air_hold <= 0.0:
+				state = "hit"
+				_t = 0.2
 		"hit":
 			velocity.x = move_toward(velocity.x, 0.0, 20.0 * delta)
 			velocity.z = move_toward(velocity.z, 0.0, 20.0 * delta)
@@ -321,7 +335,7 @@ func _physics_process(delta: float) -> void:
 			if _t > 3.5:
 				queue_free()
 	_special_cd -= delta
-	if state != "hit":
+	if state != "hit" and state != "launched":
 		velocity.x = hv.x
 		velocity.z = hv.z
 	move_and_slide()
@@ -359,11 +373,13 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 			player.call("add_xp", xp_value)
 			CombatFx.number(get_parent(), head + Vector3(0.0, 0.9, 0.0), xp_value, Color(0.5, 1.0, 0.6))
 		died.emit(self)
+		if is_boss and player != null and player.has_method("celebrate"):
+			player.call("celebrate")
 		return
 	if is_boss:
 		_check_phase()
 		return
-	if state == "slam" or state == "cast":
+	if state == "slam" or state == "cast" or state == "launched":
 		return
 	state = "hit"
 	_t = 0.0
@@ -374,6 +390,40 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 	var knock: Vector3 = push.normalized() * 5.0
 	velocity.x = knock.x
 	velocity.z = knock.z
+
+
+## Recul puissant (fin de combo).
+func knockback(dir: Vector3, force: float) -> void:
+	if state == "dead" or is_boss:
+		return
+	dir.y = 0.0
+	state = "hit"
+	_t = 0.0
+	var k: Vector3 = dir.normalized() * force
+	velocity = Vector3(k.x, force * 0.35, k.z)
+
+
+## Projection en l'air (frappe ascendante de l'exécution aérienne).
+func launch(vy: float) -> void:
+	if state == "dead" or is_boss or flying:
+		return
+	state = "launched"
+	_t = 0.0
+	_cur_anim = ""
+	_play("Hit_A", 0.05)
+	velocity = Vector3(0.0, vy, 0.0)
+
+
+func air_hold(t: float) -> void:
+	if state == "launched":
+		_air_hold = t
+
+
+## Coup descendant : renvoie l'ennemi au sol.
+func slam_down() -> void:
+	if state == "launched":
+		_air_hold = 0.0
+		velocity.y = -22.0
 
 
 # ================================================================ distance, boss, butin

@@ -116,6 +116,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		player.set("power_index", load("res://scripts/powers.gd").call("index_of", String(args["power"])))
 	powers_menu_at = 25 if args.has("powersmenu") else -1
 	tp_hold = args.has("tphold")
+	hold_attack = args.has("holdattack")
 	tp_at = int(args.get("tp", "-1"))
 	autoattack = args.has("autoattack")
 	report = args.has("report")
@@ -125,6 +126,7 @@ var autoattack: bool = false
 var shoot_at: int = -1
 var powers_menu_at: int = -1
 var tp_hold: bool = false
+var hold_attack: bool = false
 var tp_at: int = -1
 var _open_menu_at: int = -1
 var report: bool = false
@@ -158,6 +160,10 @@ func _process(delta: float) -> void:
 		GameInput.shoot_buffer = 0.2
 	if _n == tp_at:
 		GameInput.tp_buffer = 0.2
+	if hold_attack:
+		GameInput.touch_attack_held = true
+		if _n == 5:
+			GameInput.attack_buffer = 0.3
 	if tp_hold:
 		GameInput.touch_tp_held = true
 		if _n == 8:

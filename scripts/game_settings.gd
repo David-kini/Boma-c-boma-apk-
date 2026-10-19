@@ -23,6 +23,7 @@ const LOD_QUADS: Array = [[8, 4, 4], [16, 8, 4], [24, 12, 6], [32, 16, 8]]
 const CONFIG_PATH: String = "user://settings.cfg"
 
 var quality: int = 2
+var cam_fx: bool = true        # effets de caméra (ralenti, orbite, secousses) ; false = réduits
 
 
 func _ready() -> void:
@@ -30,6 +31,7 @@ func _ready() -> void:
 	var cfg: ConfigFile = ConfigFile.new()
 	if cfg.load(CONFIG_PATH) == OK:
 		quality = clampi(int(cfg.get_value("graphics", "quality", quality)), 0, 3)
+		cam_fx = bool(cfg.get_value("graphics", "cam_fx", true))
 	_apply_engine()
 
 
@@ -41,6 +43,14 @@ func set_quality(level: int) -> void:
 	cfg.save(CONFIG_PATH)
 	_apply_engine()
 	quality_changed.emit(quality)
+
+
+func set_cam_fx(on: bool) -> void:
+	cam_fx = on
+	var cfg: ConfigFile = ConfigFile.new()
+	cfg.load(CONFIG_PATH)
+	cfg.set_value("graphics", "cam_fx", on)
+	cfg.save(CONFIG_PATH)
 
 
 func cycle_quality() -> void:

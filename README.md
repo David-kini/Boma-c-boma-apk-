@@ -11,6 +11,22 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Scénario « Shadow Ninja », étape 1 : combos, combat aérien, caméra (v0.13)
+- Architecture réutilisable : scripts/combos.gd décrit chaque technique (condition,
+  séquence d'entrées, dégâts, portée, recharge, coût) ; player.gd les exécute dans une
+  machine à états « action » (une seule technique à la fois, sans conflit d'animation).
+- Combos au sol : Danse de l'épée (A, A, A : caméra latérale, pivot, frappe verticale au
+  ralenti), Frappe du dragon (maintenir ATTAQUE puis relâcher), Tempête ninja (A, A, ESQ, A),
+  Exécution aérienne (sauter près d'un ennemi puis A : il est projeté en l'air),
+  Fantôme des ténèbres (TP, A, A, ESQ).
+- En vol : Dragon céleste (A), Frappe du météore (maintenir A : zone visée, plongeon),
+  Pluie de lames (POUVOIR : cibles marquées puis piqué).
+- Ultime : Éclipse du dragon (lumière qui baisse, téléportation au-dessus de la cible,
+  frappe descendante, onde de 7 m qui repousse).
+- Caméra cinématique : exploration, combat (rapprochée), vol (suit l'altitude), boss
+  (cadre les deux), défaite (recul) ; ralentis brefs, orbite courte, vue plongeante ;
+  option « Effets de caméra : réduits » dans le menu.
+
 ## Combat ninja, pouvoirs, monde resserré (v0.12)
 - Monde réduit à 920 m x 920 m (lieux rapprochés) ; nouveaux lieux : Pics enneigés
   (sommets, sanctuaire, tour de guet), Forêt de pins (dense, camp de bûcherons), Bois sombre
