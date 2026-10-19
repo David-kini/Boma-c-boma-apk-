@@ -11,6 +11,19 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Dragon amélioré : corps, pattes, nouvelles attaques (v0.16)
+- Le modèle Quaternius n'est qu'une tête ailée : un vrai corps est construit en code
+  autour de lui (cou, torse, ventre clair, 4 pattes griffues, queue articulée de
+  7 segments qui ondule, piques dorsales). Il suit l'animation de la tête.
+- Écailles rouge sombre et yeux de braise lumineux (plus brillants avant le souffle).
+- Pattes : repliées en vol, posées sur la tour, tendues griffes en avant pendant le piqué.
+- Souffle de feu : la gueule s'illumine 0,7 s, puis jet de flammes de 2 s qui suit
+  lentement le héros (dégâts réguliers dans un cône étroit : esquive sur le côté).
+- Griffes : le piqué projette le héros au loin et laisse 3 entailles au sol.
+- Rafale d'ailes : si le héros reste collé au dragon, battement qui le repousse.
+- Pluie de météores (phase 3) : 6 boules de feu tombent sur des cercles rouges.
+- Testé : combat complet (3 phases, souffle, rafales, piqués, météores, mort, fin).
+
 ## Boss final : le Dragon des royaumes (v0.15)
 - Modèle « Dragon » du pack CC0 Ultimate Monsters (Quaternius), récupéré depuis le Drive
   (Assets/Characters/Monsters/Dragon.gltf, animations de vol, coup de tête, mort).

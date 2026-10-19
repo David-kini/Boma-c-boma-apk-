@@ -182,6 +182,16 @@ func _process(delta: float) -> void:
 			"pique":
 				dg.global_position = player.global_position + Vector3(0.0, 14.0, -14.0)
 				dg.call("_start_dive")
+			"souffle":
+				dg.global_position = player.global_position + Vector3(6.0, 10.0, -16.0)
+				dg.set("_mode", "perche")
+				dg.set("_mode_t", 30.0)
+				dg.set("_shot_t", 30.0)
+				dg.call("_start_breath", player.global_position)
+			"meteores":
+				dg.set("phase", 3)
+				dg.set("_meteor_cd", 0.0)
+				dg.global_position = player.global_position + Vector3(10.0, 12.0, -20.0)
 			_:
 				dg.global_position = Vector3(cos(0.0) * 30.0, 22.0, 0.0)
 	if dragon_mode != "" and _n > 3:
