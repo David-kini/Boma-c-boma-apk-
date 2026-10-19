@@ -121,7 +121,7 @@ func _attach_weapon() -> void:
 		sk.add_child(att)
 		att.bone_name = "handslot.r"
 		att.add_child((load(weapon_path) as PackedScene).instantiate())
-	if is_boss and sk.find_bone("head") >= 0:
+	if is_boss and boss_kind == "" and sk.find_bone("head") >= 0:
 		# couronne dorée du Roi Squelette
 		var ha: BoneAttachment3D = BoneAttachment3D.new()
 		sk.add_child(ha)
