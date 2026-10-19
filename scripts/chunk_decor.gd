@@ -20,6 +20,7 @@ const GLOW_COLORS: Array = [Color(0.35, 0.95, 1.0), Color(0.75, 0.45, 1.0), Colo
 var data: RefCounted
 var mat_lit: StandardMaterial3D
 var mat_glow: StandardMaterial3D
+var mat_rock: StandardMaterial3D
 ## type -> {"models": [chemins] OU "parts": [[Mesh, glow, Transform3D, couleur]],
 ##          "collide": "cyl"|"sphere"|"", "r", "h", "smin", "smax"}
 var types: Dictionary = {}
@@ -33,6 +34,13 @@ func _init(world_data: RefCounted) -> void:
 	mat_glow = StandardMaterial3D.new()
 	mat_glow.vertex_color_use_as_albedo = true
 	mat_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_rock = StandardMaterial3D.new()
+	mat_rock.albedo_texture = load("res://Assets/Textures/Photo/roche_rock023.jpg") as Texture2D
+	mat_rock.albedo_color = Color(0.62, 0.60, 0.58)
+	mat_rock.uv1_triplanar = true
+	mat_rock.uv1_world_triplanar = true
+	mat_rock.uv1_scale = Vector3(0.3, 0.3, 0.3)
+	mat_rock.roughness = 0.9
 	_make_types()
 
 
@@ -105,10 +113,13 @@ func _pick(x: float, z: float, h: float, rng: RandomNumberGenerator) -> String:
 	var v: float = data.zone_weight("volcan", x, z)
 	var ro: float = data.zone_weight("rochers", x, z)
 	var ru: float = data.zone_weight("ruines", x, z)
+	var pn: float = data.zone_weight("pins", x, z)
+	var bs: float = data.zone_weight("bois_sombre", x, z)
+	var mo: float = data.zone_weight("montagnes", x, z)
 	var edge: float = maxf(absf(x), absf(z))
-	var mt: float = smoothstep(470.0, 600.0, edge)
-	var open: float = (1.0 - f) * (1.0 - m) * (1.0 - v) * (1.0 - mt) * (1.0 - ro)
-	var snow: bool = h > 150.0
+	var mt: float = smoothstep(320.0, 420.0, edge)
+	var open: float = (1.0 - f) * (1.0 - m) * (1.0 - v) * (1.0 - mt) * (1.0 - ro) * (1.0 - pn) * (1.0 - bs) * (1.0 - mo)
+	var snow: bool = h > 80.0
 	var flat: bool = data.slope_ny(x, z) > 0.8
 	var table: Array = []
 	if flat and not snow:
@@ -116,12 +127,14 @@ func _pick(x: float, z: float, h: float, rng: RandomNumberGenerator) -> String:
 		table.append(["grove", 0.008 * open + 0.42 * f])
 		table.append(["mushroom", 0.18 * f])
 		table.append(["bush", 0.06 * open])
-		table.append(["dead", 0.16 * m + 0.05 * v])
+		table.append(["dead", 0.16 * m + 0.05 * v + 0.22 * bs])
+		table.append(["mushroom", 0.10 * bs])
+		table.append(["grove", 0.12 * bs])
 		table.append(["bone", 0.07 * m])
 		table.append(["grave", 0.05 * m])
 	if not snow or rng.randf() < 0.3:
-		table.append(["pine", 0.50 * mt * (1.0 - v)])
-	table.append(["rock", 0.02 + 0.30 * ro + 0.05 * ru + 0.08 * mt])
+		table.append(["pine", 0.50 * mt * (1.0 - v) + 0.62 * pn + 0.22 * mo])
+	table.append(["rock", 0.02 + 0.30 * ro + 0.05 * ru + 0.08 * mt + 0.12 * mo + 0.04 * pn])
 	table.append(["spike", 0.12 * v + 0.03 * m])
 	var roll: float = rng.randf()
 	var acc: float = 0.0
@@ -226,5 +239,8 @@ func decorate(node: Node3D, k: Vector2i, collide: bool) -> void:
 			mmi.material_override = mat_glow
 		elif mode == 0:
 			mmi.material_override = mat_lit
+		elif String(key).contains("rock_single"):
+			# rochers : vraie texture photo de roche (au lieu du blanc uni du modèle)
+			mmi.material_override = mat_rock
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.add_child(mmi)

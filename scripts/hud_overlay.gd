@@ -30,7 +30,8 @@ func _buttons() -> Dictionary:
 		"divine": [Vector2(s.x - 400.0, s.y - 72.0), 40.0, "DIVIN"],
 		"weapon": [Vector2(s.x - 58.0, 125.0), 30.0, "ARME"],
 		"heal": [Vector2(s.x - 58.0, 195.0), 30.0, "SOIN"],
-		"shoot": [Vector2(s.x - 210.0, s.y - 305.0), 38.0, "TIR"],
+		"shoot": [Vector2(s.x - 210.0, s.y - 305.0), 42.0, _power_label()],
+		"powers": [Vector2(s.x - 58.0, 265.0), 30.0, "POUV."],
 		"tp": [Vector2(s.x - 390.0, s.y - 195.0), 38.0, "TP"],
 		"ulti": [Vector2(s.x - 335.0, s.y - 320.0), 40.0, "ULTI"],
 		"menu": [Vector2(s.x - 58.0, 50.0), 34.0, "MENU"],
@@ -50,6 +51,7 @@ func _reset() -> void:
 	pressed.clear()
 	GameInput.touch_move = Vector2.ZERO
 	GameInput.touch_jump_held = false
+	GameInput.touch_tp_held = false
 
 
 func _input(event: InputEvent) -> void:
@@ -102,6 +104,9 @@ func _press(bname: String) -> void:
 		GameInput.heal_buffer = GameInput.BUFFER_TIME
 	elif bname == "shoot":
 		GameInput.shoot_buffer = GameInput.BUFFER_TIME
+	elif bname == "powers":
+		_reset()
+		get_parent().call("open_powers")
 	elif bname == "tp":
 		GameInput.tp_buffer = GameInput.BUFFER_TIME
 	elif bname == "ulti":
@@ -133,6 +138,7 @@ func _touch_drag(idx: int, pos: Vector2, rel: Vector2) -> void:
 
 func _process(_delta: float) -> void:
 	GameInput.touch_jump_held = bool(pressed.get("jump", false))
+	GameInput.touch_tp_held = bool(pressed.get("tp", false))
 	if enabled:
 		queue_redraw()
 
@@ -173,3 +179,15 @@ func _ulti_ready() -> bool:
 	if ps.is_empty():
 		return false
 	return float(ps[0].get("ulti")) >= 100.0
+
+
+## Libellé du bouton POUVOIR : nom court du pouvoir choisi, ou temps de recharge.
+func _power_label() -> String:
+	var ps: Array = get_tree().get_nodes_in_group("player") if is_inside_tree() else []
+	if ps.is_empty():
+		return "POUV."
+	var p: Node = ps[0]
+	var cd: float = float(p.get("power_cd"))
+	if cd > 0.05:
+		return "%.1f" % cd
+	return String(p.call("power_short"))

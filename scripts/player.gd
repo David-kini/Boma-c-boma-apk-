@@ -24,15 +24,16 @@ const DivineAura = preload("res://scripts/divine_aura.gd")
 const Weapons = preload("res://scripts/weapons.gd")
 const SaveGame = preload("res://scripts/save_game.gd")
 const PlayerShot = preload("res://scripts/player_shot.gd")
+const Powers = preload("res://scripts/powers.gd")
 
 ## Combo : durée (s), instant du coup (fraction), dégâts, portée (m), angle (cos mini,
 ## -1 = tout autour), élan vers l'avant (m/s)
 const ATTACKS: Array = [
-	{"dur": 0.40, "hit": 0.42, "dmg": 10.0, "range": 2.7, "arc": 0.25, "lunge": 3.5},
-	{"dur": 0.40, "hit": 0.42, "dmg": 12.0, "range": 2.7, "arc": 0.25, "lunge": 3.5},
-	{"dur": 0.50, "hit": 0.52, "dmg": 16.0, "range": 3.0, "arc": 0.15, "lunge": 4.5},
-	{"dur": 0.62, "hit": 0.45, "dmg": 26.0, "range": 3.3, "arc": -1.0, "lunge": 2.0},
-	{"dur": 0.60, "hit": 0.50, "dmg": 32.0, "range": 3.8, "arc": -1.0, "lunge": 1.5, "aoe": true},
+	{"dur": 0.40, "hit": 0.42, "dmg": 10.0, "range": 2.7, "arc": 0.25, "lunge": 5.5},
+	{"dur": 0.40, "hit": 0.42, "dmg": 12.0, "range": 2.7, "arc": 0.25, "lunge": 5.5},
+	{"dur": 0.52, "hit": 0.55, "dmg": 16.0, "range": 3.0, "arc": 0.15, "lunge": 6.5},      # coup sauté
+	{"dur": 0.62, "hit": 0.45, "dmg": 26.0, "range": 3.3, "arc": -1.0, "lunge": 4.0},      # coup circulaire
+	{"dur": 0.80, "hit": 0.50, "dmg": 32.0, "range": 3.6, "arc": -1.0, "lunge": 3.0, "aoe": true},  # salto + impact
 ]
 const FLY_TIME: float = 10.0
 const FLY_COOLDOWN: float = 5.0
@@ -61,6 +62,12 @@ const TP_COOLDOWN: float = 2.5
 const TP_CHAIN: int = 3
 const ULTI_MAX: float = 100.0
 const ULTI_TIME: float = 1.7
+const SPRINT_SPEED: float = 8.8
+const PLUNGE_RADIUS: float = 4.0
+const ZONE_RADIUS: float = 5.0
+const TP_AIM_RANGE: float = 18.0
+const TP_STRIKE_RADIUS: float = 4.0
+const ULTI_RADIUS: float = 10.0
 
 var cam: Node3D = null
 var world: Node3D = null
@@ -135,6 +142,35 @@ var ulti: float = 0.0
 var ulti_t: float = -1.0          # >= 0 pendant l'attaque finale
 var _ulti_strikes: int = 0
 var _ulti_y: float = 0.0
+var _glide: bool = false
+var _plunge: bool = false
+var _run_t: float = 0.0
+var _wall_t: float = 0.0
+var _wallrun: bool = false
+var _near_t: float = 0.0
+var _enemy_near: bool = false
+# --- pouvoirs
+var power_index: int = 0
+var power_cd: float = 0.0
+var _zone_t: float = -1.0
+var _dash_t: float = 0.0
+var _dash_dir: Vector3 = Vector3.ZERO
+var _dash_from: Vector3 = Vector3.ZERO
+var _dash_hit: Array = []
+var _shield_t: float = 0.0
+var _shield_hp: float = 0.0
+var shield: MeshInstance3D = null
+var _combo_left: int = 0
+var _combo_tick: float = 0.0
+# --- téléportation ciblée
+var _tp_press: bool = false
+var _tp_hold: float = 0.0
+var _tp_aiming: bool = false
+var _aim_point: Vector3 = Vector3.ZERO
+var _aim_dest: Vector3 = Vector3.ZERO
+var _aim_target: Node3D = null
+var _aim_ring: MeshInstance3D = null
+var _aim_mark: MeshInstance3D = null
 
 
 func _ready() -> void:
@@ -238,10 +274,14 @@ func _physics_process(delta: float) -> void:
 					velocity.y *= 0.82     # simple tapotement : saut normal
 				_holding_jump = false
 		velocity.y = maxf(velocity.y - g * delta, -MAX_FALL)
+		if _glide:
+			velocity.y = maxf(velocity.y, -4.5)
 		_fall_speed = maxf(_fall_speed, -velocity.y)
 	else:
-		if not _was_on_floor and _fall_speed > HARD_LAND_SPEED and not long_jump:
+		if not _was_on_floor and _fall_speed > HARD_LAND_SPEED and not long_jump and _atk_i != 4 and not _plunge:
 			_land_t = LAND_TIME
+		_glide = false
+		_wall_t = 0.0
 		if not _was_on_floor:
 			_jumps = 0
 			long_jump = false
@@ -277,21 +317,52 @@ func _physics_process(delta: float) -> void:
 
 	# attaque (combo)
 	if GameInput.attack_buffer > 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
-		if _atk_i < 0:
+		if _atk_i < 0 and not _plunge:
 			GameInput.consume_attack()
-			_start_attack(_combo_next)
+			if not on_floor and not is_flying and global_position.y - _ground_h() > 2.5:
+				_start_plunge()
+			else:
+				_start_attack(_combo_next)
 		elif _atk_t > _dur(_atk_i) * 0.35:
 			GameInput.consume_attack()
 			_atk_queued = true
 	if _atk_i >= 0:
 		_process_attack(delta)
 	# attaque à distance, téléportation, attaque finale
-	if GameInput.shoot_buffer > 0.0 and _shot_cd <= 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
+	_update_shield(delta)
+	if _dash_t > 0.0:
+		_process_dash(delta)
+		return
+	if _combo_left > 0:
+		_process_combo(delta)
+		return
+	if _zone_t >= 0.0:
+		_zone_t -= delta
+		if _zone_t < 0.0:
+			_zone_impact()
+	if GameInput.shoot_buffer > 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
 		GameInput.shoot_buffer = 0.0
-		_shoot()
-	if GameInput.tp_buffer > 0.0 and _hurt_t <= 0.0:
+		if power_cd <= 0.0:
+			use_power(facing)
+	# téléportation : appui court = téléportation rapide ; maintenu = ciblage puis frappe de zone
+	if GameInput.tp_buffer > 0.0 and _hurt_t <= 0.0 and not _tp_press:
 		GameInput.tp_buffer = 0.0
-		_teleport(facing)
+		_tp_press = true
+		_tp_hold = 0.0
+	if _tp_press:
+		if GameInput.tp_held():
+			_tp_hold += delta
+			if _tp_hold > 0.25:
+				_update_tp_aim(delta, wish, has_input)
+				move_and_slide()
+				state = "guard"
+				return
+		else:
+			_tp_press = false
+			if _tp_aiming:
+				_teleport_aimed()
+			else:
+				_teleport(facing)
 	if GameInput.ulti_buffer > 0.0:
 		GameInput.ulti_buffer = 0.0
 		if ulti >= ULTI_MAX:
@@ -301,6 +372,9 @@ func _physics_process(delta: float) -> void:
 
 	if is_flying:
 		_fly_move(delta, wish, has_input)
+		return
+	if _plunge:
+		_process_plunge(on_floor)
 		return
 
 	# esquive (annule l'attaque en cours)
@@ -333,7 +407,14 @@ func _physics_process(delta: float) -> void:
 		velocity.z = fwd.z * lunge + mv_slow.z
 	else:
 		invulnerable = false
+		# course, puis course rapide (sprint) après 1 s de course continue
+		if GameInput.wants_run() and has_input and on_floor:
+			_run_t += delta
+		elif on_floor:
+			_run_t = 0.0
 		var speed: float = RUN_SPEED if GameInput.wants_run() else WALK_SPEED
+		if GameInput.wants_run():
+			speed = lerpf(RUN_SPEED, SPRINT_SPEED, smoothstep(1.0, 1.6, _run_t))
 		if is_divine:
 			speed *= 1.3
 		var target: Vector3 = Vector3.ZERO
@@ -356,6 +437,8 @@ func _physics_process(delta: float) -> void:
 		state = "dodge"
 	elif _land_t > 0.0:
 		state = "land"
+	elif air and _wallrun:
+		state = "wallrun"
 	elif air and _flip_t > 0.0:
 		state = "flip"
 	elif air and long_jump:
@@ -367,7 +450,11 @@ func _physics_process(delta: float) -> void:
 	elif hspeed > 0.3:
 		state = "walk"
 	else:
-		state = "idle"
+		state = "guard" if _enemy_near else "idle"
+	_near_t -= delta
+	if _near_t <= 0.0:
+		_near_t = 0.3
+		_enemy_near = _nearest_enemy(11.0) != null
 
 	if _dodge_t > 0.0:
 		face_yaw = atan2(-_dodge_dir.x, -_dodge_dir.z)
@@ -396,10 +483,16 @@ func _process(delta: float) -> void:
 		rig.rotation.y = lerp_angle(rig.rotation.y, face_yaw, 1.0 - exp(-14.0 * delta))
 	# salto avant du double saut, tourné autour des hanches
 	var flip: float = 0.0
+	var pivot: float = 0.95
 	if _flip_t > 0.0:
 		flip = -TAU * ease(1.0 - _flip_t / FLIP_TIME, -1.6)
+	elif _atk_i == 4 and _atk_t < 0.3:
+		flip = -TAU * ease(clampf(_atk_t / 0.3, 0.0, 1.0), -1.6)     # salto avant avant l'impact
+	elif _dodge_t > 0.0:
+		flip = -TAU * ease(1.0 - _dodge_t / DODGE_TIME, -1.4)      # roulade
+		pivot = 0.5
 	rig.rotation.x = flip
-	rig.position = Vector3(0.0, 0.95, 0.0) - rig.basis * Vector3(0.0, 0.95, 0.0)
+	rig.position = Vector3(0.0, pivot, 0.0) - rig.basis * Vector3(0.0, pivot, 0.0)
 	if debug_anim != "":
 		if debug_anim.begins_with("attack"):
 			rig.set("attack_kind", int(debug_anim.substr(6, 1)))
@@ -468,6 +561,14 @@ func _start_attack(i: int) -> void:
 	if w != null:
 		w.set("trail_on", true)
 	Sfx.play("swing", 1.0 + 0.08 * float(i))
+	# acrobaties : coup sauté, salto du coup final, suspension pendant les coups aériens
+	if is_on_floor():
+		if i == 2:
+			velocity.y = 4.5
+		elif i == 4:
+			velocity.y = 7.0
+	elif not is_flying:
+		velocity.y = maxf(velocity.y, 2.5)
 
 
 func _end_attack() -> void:
@@ -484,7 +585,16 @@ func _process_attack(delta: float) -> void:
 	var a: Dictionary = ATTACKS[_atk_i]
 	_atk_t += delta
 	var dur: float = _dur(_atk_i)
-	if not _atk_hit and _atk_t >= dur * float(a["hit"]):
+	if _atk_i == 4 and not is_flying:
+		# coup final : salto puis plongeon, l'impact se produit en touchant le sol
+		if not _atk_hit:
+			if _atk_t >= 0.3 and not is_on_floor():
+				velocity.y = minf(velocity.y, -16.0)
+			if (_atk_t >= 0.3 and is_on_floor()) or _atk_t >= dur:
+				_atk_hit = true
+				_deal_hits(a)
+				CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), _weapon_color(), float(a["range"]), 0.35)
+	elif not _atk_hit and _atk_t >= dur * float(a["hit"]):
 		_atk_hit = true
 		_deal_hits(a)
 	if _atk_t >= dur:
@@ -509,7 +619,10 @@ func _deal_hits(a: Dictionary) -> void:
 			continue
 		if float(a["arc"]) > -1.0 and dist > 0.4 and fwd.dot(to_e.normalized()) < float(a["arc"]):
 			continue
-		en.call("take_damage", float(a["dmg"]) * _dmg_mult(), global_position)
+		var falloff: float = 1.0
+		if a.has("aoe"):
+			falloff = lerpf(1.3, 0.7, clampf(dist / float(a["range"]), 0.0, 1.0))
+		en.call("take_damage", float(a["dmg"]) * _dmg_mult() * falloff, global_position)
 		hits += 1
 	if a.has("aoe"):
 		# 5e coup : éclair qui frappe tout autour
@@ -538,6 +651,14 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 		return
 	if is_divine:
 		amount *= 0.5
+	if _shield_t > 0.0 and _shield_hp > 0.0:
+		var absorbed: float = minf(amount, _shield_hp)
+		_shield_hp -= absorbed
+		amount -= absorbed
+		CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.2, 0.0), Color(0.4, 0.8, 1.0), 0.9)
+		Sfx.play("hit", 1.6)
+		if amount <= 0.0:
+			return
 	Sfx.play("hurt")
 	hp = maxf(hp - amount, 0.0)
 	_since_hit = 0.0
@@ -587,6 +708,7 @@ func _update_powers(delta: float) -> void:
 	_fly_cd -= delta
 	_shot_cd -= delta
 	_tp_cd -= delta
+	power_cd = maxf(power_cd - delta, 0.0)
 	if _tp_window > 0.0:
 		_tp_window -= delta
 		if _tp_window <= 0.0:
@@ -650,6 +772,7 @@ func _stop_fly() -> void:
 	if not is_flying:
 		return
 	is_flying = false
+	_glide = true          # redescente en douceur jusqu'au sol (ou un toit)
 	_fly_cd = FLY_COOLDOWN
 	wings.call("set_deployed", false)
 
@@ -662,10 +785,13 @@ func _ground_h() -> float:
 
 ## Vol : déplacement libre à altitude réglable (SAUT = monter, ESQ. = descendre).
 func _fly_move(delta: float, wish: Vector3, has_input: bool) -> void:
+	# SAUT = monter (jusqu'à 60 m : au-dessus des tours et des constructions), ESQ. = descendre
 	if GameInput.consume_jump():
-		_fly_h = minf(_fly_h + 3.0, 30.0)
+		_fly_h = minf(_fly_h + 4.0, 60.0)
+	if GameInput.jump_held():
+		_fly_h = minf(_fly_h + 9.0 * delta, 60.0)
 	if GameInput.consume_dodge():
-		_fly_h = maxf(_fly_h - 3.0, 1.5)
+		_fly_h = maxf(_fly_h - 4.0, 1.5)
 	var spd: float = FLY_FAST if GameInput.wants_run() else FLY_SPEED
 	if is_divine:
 		spd *= 1.3
@@ -673,7 +799,7 @@ func _fly_move(delta: float, wish: Vector3, has_input: bool) -> void:
 	velocity.x = move_toward(velocity.x, target.x, 14.0 * delta)
 	velocity.z = move_toward(velocity.z, target.z, 14.0 * delta)
 	var want_y: float = _ground_h() + _fly_h + sin(Time.get_ticks_msec() * 0.003) * 0.25
-	velocity.y = clampf((want_y - global_position.y) * 3.0, -9.0, 9.0)
+	velocity.y = clampf((want_y - global_position.y) * 3.0, -9.0, 11.0)
 	move_and_slide()
 	_update_blob()
 	hspeed = Vector2(velocity.x, velocity.z).length()
@@ -772,7 +898,7 @@ func add_xp(amount: int) -> void:
 
 func save_progress() -> void:
 	SaveGame.save({"level": level, "xp": xp, "weapon": weapon_index, "wings": wings_variant,
-		"gold": gold, "potions": potions, "coat": coat_name})
+		"gold": gold, "potions": potions, "coat": coat_name, "power": power_index})
 
 
 func _load_progress() -> void:
@@ -784,6 +910,7 @@ func _load_progress() -> void:
 	gold = int(d.get("gold", 0))
 	potions = int(d.get("potions", 1))
 	coat_name = String(d.get("coat", "Noir"))
+	power_index = int(d.get("power", 0))
 	max_hp = 120.0 + 10.0 * float(level - 1)
 	hp = max_hp
 	if int(Weapons.get_def(weapon_index)["level"]) > level:
@@ -848,7 +975,29 @@ func _ground_move(delta: float, target: Vector3, wish: Vector3, has_input: bool,
 		velocity.y = maxf(velocity.y, 6.5)
 		Sfx.play("longjump")
 		CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.1, 0.0), Color(0.6, 0.85, 1.0, 0.8), 2.5, 0.35)
-	# saut / double saut
+	# course sur le mur : en l'air, contre un mur, saut maintenu -> on monte le long du mur
+	_wallrun = false
+	if not on_floor and is_on_wall() and has_input:
+		var n: Vector3 = get_wall_normal()
+		if wish.normalized().dot(-n) > 0.3 and GameInput.jump_held() and _wall_t < 0.6:
+			_wall_t += delta
+			_wallrun = true
+			velocity.y = 6.5
+			velocity.x = -n.x * 1.5
+			velocity.z = -n.z * 1.5
+			face_yaw = atan2(n.x, n.z)
+	# saut / double saut / rebond mural
+	if GameInput.jump_buffer > 0.0 and _land_t <= 0.0 and not on_floor and is_on_wall() and _coyote <= 0.0:
+		GameInput.consume_jump()
+		var wn: Vector3 = get_wall_normal()
+		velocity = Vector3(wn.x * 8.5, 9.0, wn.z * 8.5)
+		face_yaw = atan2(-wn.x, -wn.z)
+		_jumps = 1
+		_wall_t = 0.0
+		_flip_t = FLIP_TIME
+		_holding_jump = false
+		Sfx.play("jump2", 1.1)
+		CombatFx.ring(get_parent(), global_position + Vector3(0.0, 1.0, 0.0) - wn * 0.3, Color(0.7, 0.9, 1.0, 0.8), 1.2, 0.25)
 	if GameInput.jump_buffer > 0.0 and _land_t <= 0.0:
 		if _coyote > 0.0:
 			GameInput.consume_jump()
@@ -950,7 +1099,7 @@ func _teleport(facing: Vector3) -> void:
 		away.y = 0.0
 		away = away.normalized() if away.length() > 0.1 else -facing
 		var dest: Vector3 = tp + away * 1.3
-		dest.y = maxf(tp.y, _ground_at(dest) + 0.05)
+		dest = _safe_dest(dest)
 		global_position = dest
 		velocity = Vector3.ZERO
 		var look: Vector3 = tp - dest
@@ -988,9 +1137,7 @@ func _teleport(facing: Vector3) -> void:
 		var dist: float = 7.0
 		if not hit.is_empty():
 			dist = maxf(from.distance_to(hit["position"]) - 0.7, 0.0)
-		var dest2: Vector3 = global_position + facing * dist
-		dest2.y = maxf(global_position.y, _ground_at(dest2) + 0.05)
-		global_position = dest2
+		global_position = _safe_dest(global_position + facing * dist)
 		_tp_cd = 1.2
 		Sfx.play("teleport", 1.15)
 	CombatFx.afterimage(get_parent(), global_position, col)
@@ -1027,7 +1174,8 @@ func _start_ulti() -> void:
 	velocity = Vector3.ZERO
 	announce.emit("JUGEMENT DE LA FOUDRE !")
 	Sfx.play("ulti_charge")
-	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), Color(1.0, 0.85, 0.4, 0.9), 6.0, 0.6)
+	# la zone de l'attaque finale s'affiche au sol dès le début
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), Color(1.0, 0.85, 0.4, 0.9), ULTI_RADIUS, 0.6)
 
 
 func _process_ulti(delta: float) -> void:
@@ -1047,12 +1195,13 @@ func _process_ulti(delta: float) -> void:
 			var en: Node3D = e as Node3D
 			if en == null or String(en.get("state")) == "dead":
 				continue
-			if en.global_position.distance_to(global_position) > 16.0:
+			var udist: float = Vector2(en.global_position.x - global_position.x, en.global_position.z - global_position.z).length()
+			if udist > ULTI_RADIUS:
 				continue
 			var p: Vector3 = en.global_position
 			CombatFx.bolt(get_parent(), p + Vector3(randf_range(-2.0, 2.0), 22.0, randf_range(-2.0, 2.0)), p + Vector3(0.0, 0.3, 0.0), col, 0.35)
 			CombatFx.spark(get_parent(), p + Vector3(0.0, 1.0, 0.0), col, 1.6)
-			en.call("take_damage", 45.0 * _dmg_mult(), global_position)
+			en.call("take_damage", 45.0 * _dmg_mult() * lerpf(1.3, 0.7, udist / ULTI_RADIUS), global_position)
 			n += 1
 			if n >= 10:
 				break
@@ -1069,8 +1218,432 @@ func _process_ulti(delta: float) -> void:
 		if world != null and world.has_method("flash"):
 			world.call("flash", 0.6)
 		if _ulti_strikes == times.size():
-			CombatFx.ring(get_parent(), Vector3(global_position.x, _ulti_y + 0.2, global_position.z), col, 14.0, 0.5)
+			CombatFx.ring(get_parent(), Vector3(global_position.x, _ulti_y + 0.2, global_position.z), col, ULTI_RADIUS, 0.5)
 			Sfx.play("ulti_boom")
 	if ulti_t >= ULTI_TIME:
 		ulti_t = -1.0
 		invulnerable = false
+
+
+## Attaque plongeante : depuis les hauteurs, le héros fonce vers le sol épée en avant ;
+## à l'impact, onde de choc (rayon 4 m, plus forte au centre).
+func _start_plunge() -> void:
+	_end_attack()
+	_plunge = true
+	_glide = false
+	velocity = Vector3(-sin(face_yaw) * 3.0, -26.0, -cos(face_yaw) * 3.0)
+	invulnerable = true
+	Sfx.play("swing", 0.7)
+	var target: Node3D = _nearest_enemy(8.0)
+	if target != null:
+		var d: Vector3 = target.global_position - global_position
+		d.y = 0.0
+		face_yaw = atan2(-d.x, -d.z)
+		velocity.x = d.x * 1.2
+		velocity.z = d.z * 1.2
+
+
+func _process_plunge(on_floor: bool) -> void:
+	state = "plunge"
+	move_and_slide()
+	_update_blob()
+	if on_floor or is_on_floor():
+		_plunge = false
+		invulnerable = false
+		_land_t = 0.2
+		var col: Color = _weapon_color()
+		CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), col, PLUNGE_RADIUS, 0.4)
+		for k in range(6):
+			var ang: float = float(k) / 6.0 * TAU
+			CombatFx.spark(get_parent(), global_position + Vector3(cos(ang) * 2.0, 0.3, sin(ang) * 2.0), col, 1.1)
+		var hits: int = 0
+		for e in get_tree().get_nodes_in_group("enemies"):
+			var en: Node3D = e as Node3D
+			if en == null or String(en.get("state")) == "dead":
+				continue
+			var dd: float = Vector2(en.global_position.x - global_position.x, en.global_position.z - global_position.z).length()
+			if dd < PLUNGE_RADIUS and absf(en.global_position.y - global_position.y) < 2.5:
+				en.call("take_damage", 30.0 * _dmg_mult() * lerpf(1.4, 0.7, dd / PLUNGE_RADIUS), global_position)
+				hits += 1
+		if hits > 0:
+			on_ranged_hit()
+		Sfx.play("ulti_boom", 1.6)
+		if cam != null:
+			cam.call("shake", 0.45)
+
+
+# ================================================================ pouvoirs (menu POUVOIRS)
+
+func power_short() -> String:
+	return String(Powers.get_def(power_index)["short"])
+
+
+func set_power(i: int) -> void:
+	power_index = clampi(i, 0, Powers.count() - 1)
+	announce.emit("Pouvoir : " + String(Powers.get_def(power_index)["name"]))
+	save_progress()
+
+
+## Déclenche le pouvoir choisi (bouton POUVOIR / touche G).
+func use_power(facing: Vector3) -> void:
+	if power_cd > 0.0:
+		return
+	var d: Dictionary = Powers.get_def(power_index)
+	var cd: float = float(d["cd"])
+	match String(d["id"]):
+		"vague":
+			_shoot()
+		"tp":
+			_teleport(facing)
+			cd = 0.3
+		"zone":
+			_start_zone()
+		"vol":
+			if is_flying:
+				_stop_fly()
+			elif _fly_cd <= 0.0:
+				_start_fly()
+			else:
+				announce.emit("Vol disponible dans %d s" % int(ceil(_fly_cd)))
+				return
+		"eclair":
+			_start_dash(facing)
+		"bouclier":
+			_start_shield()
+		"combo":
+			_end_attack()
+			_combo_left = 6
+			_combo_tick = 0.0
+			Sfx.play("teleport", 1.3)
+	power_cd = cd * (0.7 if is_divine else 1.0)
+
+
+## Frappe de zone : la zone (5 m) s'affiche au sol pendant 0,4 s, puis onde de choc.
+func _start_zone() -> void:
+	_end_attack()
+	_zone_t = 0.4
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.12, 0.0), Color(1.0, 0.35, 0.2, 0.9), ZONE_RADIUS, 0.4)
+	_pose_kind = 4
+	_pose_dur = 0.5
+	_pose_t = _pose_dur
+	if is_on_floor():
+		velocity.y = 5.0
+	Sfx.play("ulti_charge", 1.8)
+
+
+func _zone_impact() -> void:
+	var col: Color = _weapon_color()
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), col, ZONE_RADIUS, 0.35)
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.3, 0.0), Color(1, 1, 1, 0.8), ZONE_RADIUS * 0.6, 0.25)
+	for k in range(8):
+		var ang: float = float(k) / 8.0 * TAU
+		CombatFx.spark(get_parent(), global_position + Vector3(cos(ang) * 2.5, 0.3, sin(ang) * 2.5), col, 1.2)
+	var hits: int = 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var dd: float = Vector2(en.global_position.x - global_position.x, en.global_position.z - global_position.z).length()
+		if dd < ZONE_RADIUS and absf(en.global_position.y - global_position.y) < 3.0:
+			en.call("take_damage", 40.0 * _dmg_mult() * lerpf(1.4, 0.6, dd / ZONE_RADIUS), global_position)
+			hits += 1
+	if hits > 0:
+		on_ranged_hit()
+	Sfx.play("ulti_boom", 1.3)
+	if cam != null:
+		cam.call("shake", 0.5)
+
+
+## Attaque éclair : ruée de 10 m en 0,15 s, invincible, tranche tout sur le passage.
+func _start_dash(facing: Vector3) -> void:
+	_end_attack()
+	var dir: Vector3 = facing
+	var target: Node3D = _nearest_enemy(10.0)
+	if target != null:
+		dir = target.global_position - global_position
+		dir.y = 0.0
+		dir = dir.normalized()
+	face_yaw = atan2(-dir.x, -dir.z)
+	_dash_dir = dir
+	_dash_t = 0.15
+	_dash_from = global_position
+	_dash_hit.clear()
+	CombatFx.afterimage(get_parent(), global_position, _weapon_color())
+	Sfx.play("teleport", 0.8)
+	Sfx.play("lightning", 1.4)
+
+
+func _process_dash(delta: float) -> void:
+	_dash_t -= delta
+	invulnerable = true
+	velocity = _dash_dir * 66.0
+	velocity.y = 0.0
+	move_and_slide()
+	_update_blob()
+	state = "attack"
+	_pose_kind = 1
+	_pose_dur = 0.25
+	_pose_t = 0.12
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or _dash_hit.has(en) or String(en.get("state")) == "dead":
+			continue
+		if en.global_position.distance_to(global_position) < 1.9:
+			_dash_hit.append(en)
+			en.call("take_damage", 35.0 * _dmg_mult(), global_position - _dash_dir)
+			CombatFx.spark(get_parent(), en.global_position + Vector3(0.0, 1.0, 0.0), _weapon_color(), 1.3)
+			on_ranged_hit()
+	if _dash_t <= 0.0:
+		velocity = Vector3.ZERO
+		invulnerable = false
+		CombatFx.bolt(get_parent(), _dash_from + Vector3(0.0, 1.0, 0.0), global_position + Vector3(0.0, 1.0, 0.0), _weapon_color(), 0.3)
+		CombatFx.afterimage(get_parent(), global_position, _weapon_color())
+
+
+## Bouclier énergétique : 6 s, absorbe 60 dégâts.
+func _start_shield() -> void:
+	_shield_t = 6.0
+	_shield_hp = 60.0
+	if shield == null:
+		shield = MeshInstance3D.new()
+		var sm: SphereMesh = SphereMesh.new()
+		sm.radius = 1.15
+		sm.height = 2.3
+		sm.radial_segments = 16
+		sm.rings = 8
+		shield.mesh = sm
+		var m: StandardMaterial3D = StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.albedo_color = Color(0.35, 0.7, 1.0, 0.22)
+		m.rim_enabled = true
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		shield.material_override = m
+		shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		shield.position = Vector3(0.0, 0.95, 0.0)
+		add_child(shield)
+	shield.visible = true
+	Sfx.play("divine", 1.5)
+	announce.emit("Bouclier énergétique : 6 s")
+
+
+func _update_shield(delta: float) -> void:
+	if _shield_t <= 0.0:
+		return
+	_shield_t -= delta
+	if shield != null:
+		var pulse: float = 1.0 + sin(Time.get_ticks_msec() * 0.01) * 0.03
+		shield.scale = Vector3.ONE * pulse
+		(shield.material_override as StandardMaterial3D).albedo_color.a = 0.14 + 0.1 * (_shield_hp / 60.0)
+	if _shield_t <= 0.0 or _shield_hp <= 0.0:
+		_shield_t = 0.0
+		if shield != null:
+			shield.visible = false
+
+
+## Combo ninja : 6 coups, téléportation d'un ennemi à l'autre toutes les 0,2 s.
+func _process_combo(delta: float) -> void:
+	_combo_tick -= delta
+	invulnerable = true
+	velocity = Vector3.ZERO
+	move_and_slide()
+	state = "attack"
+	if _combo_tick > 0.0:
+		return
+	_combo_tick = 0.2
+	_combo_left -= 1
+	var col: Color = _weapon_color()
+	var best: Node3D = null
+	var best_d: float = 9.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var dd: float = en.global_position.distance_to(global_position) + (4.0 if en == _tp_last else 0.0)
+		if dd < best_d:
+			best_d = dd
+			best = en
+	_pose_kind = [0, 1, 2, 3, 0, 1][_combo_left % 6]
+	_pose_dur = 0.2
+	_pose_t = 0.2
+	Sfx.play("swing", 1.1 + 0.05 * float(_combo_left))
+	if best != null:
+		CombatFx.afterimage(get_parent(), global_position, col)
+		var side: float = 1.0 if _combo_left % 2 == 0 else -1.0
+		var to_e: Vector3 = best.global_position - global_position
+		to_e.y = 0.0
+		var perp: Vector3 = Vector3(-to_e.z, 0.0, to_e.x).normalized() * side
+		var dest: Vector3 = _safe_dest(best.global_position + perp * 1.3)
+		global_position = dest
+		var look: Vector3 = best.global_position - dest
+		face_yaw = atan2(-look.x, -look.z)
+		rig.rotation.y = face_yaw
+		best.call("take_damage", 14.0 * _dmg_mult(), dest)
+		CombatFx.spark(get_parent(), best.global_position + Vector3(0.0, 1.0, 0.0), col, 1.0)
+		_tp_last = best
+		on_ranged_hit()
+	else:
+		# aucun ennemi : tourbillon d'épée sur place
+		CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.8, 0.0), col, 2.5, 0.2)
+	if _combo_left <= 0:
+		invulnerable = false
+		_combo_next = 3
+		_combo_reset = 0.8
+
+
+## Position d'arrivée sûre : posée sur le sol ou un toit, jamais dans un mur ni hors du monde.
+func _safe_dest(to: Vector3) -> Vector3:
+	var lim: float = 450.0
+	to.x = clampf(to.x, -lim, lim)
+	to.z = clampf(to.z, -lim, lim)
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var cap: CapsuleShape3D = CapsuleShape3D.new()
+	cap.radius = 0.32
+	cap.height = 1.6
+	var q: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	q.shape = cap
+	q.collision_mask = 1
+	var from: Vector3 = global_position
+	for k in range(7):
+		var f: float = 1.0 - float(k) / 7.0
+		var p: Vector3 = from.lerp(to, f)
+		# surface d'appui : rayon vers le bas (sol ou toit)
+		var rq: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(p + Vector3(0.0, 6.0, 0.0), p + Vector3(0.0, -30.0, 0.0), 1)
+		var hit: Dictionary = space.intersect_ray(rq)
+		var gy: float = _ground_at(p)
+		if not hit.is_empty():
+			gy = maxf(gy, float((hit["position"] as Vector3).y))
+		p.y = gy + 0.05
+		q.transform = Transform3D(Basis.IDENTITY, p + Vector3(0.0, 0.95, 0.0))
+		if space.intersect_shape(q, 1).is_empty():
+			return p
+	return global_position
+
+
+## Téléportation ciblée (bouton TP maintenu) : marqueur d'arrivée + ennemi visé.
+func _update_tp_aim(delta: float, wish: Vector3, has_input: bool) -> void:
+	if not _tp_aiming:
+		_tp_aiming = true
+		var yaw: float = float(cam.get("yaw")) if cam != null else face_yaw
+		_aim_point = global_position + Vector3(-sin(yaw), 0.0, -cos(yaw)) * 8.0
+		_build_aim_markers()
+		announce.emit("Ciblage : relâche pour te téléporter")
+	if has_input:
+		_aim_point += wish.normalized() * 14.0 * delta
+	var off: Vector3 = _aim_point - global_position
+	off.y = 0.0
+	if off.length() > TP_AIM_RANGE:
+		_aim_point = global_position + off.normalized() * TP_AIM_RANGE
+	_aim_target = null
+	var best: float = 4.5
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var dd: float = Vector2(en.global_position.x - _aim_point.x, en.global_position.z - _aim_point.z).length()
+		if dd < best:
+			best = dd
+			_aim_target = en
+	var dest: Vector3 = _aim_point
+	if _aim_target != null:
+		var away: Vector3 = _aim_target.global_position - global_position
+		away.y = 0.0
+		dest = _aim_target.global_position + away.normalized() * 1.3
+	_aim_dest = _safe_dest(dest)
+	_aim_ring.visible = true
+	_aim_ring.global_position = _aim_dest + Vector3(0.0, 0.12, 0.0)
+	_aim_ring.rotation.y += delta * 3.0
+	_aim_mark.visible = _aim_target != null
+	if _aim_target != null:
+		_aim_mark.global_position = _aim_target.global_position + Vector3(0.0, 2.9 + sin(Time.get_ticks_msec() * 0.008) * 0.15, 0.0)
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+
+func _build_aim_markers() -> void:
+	if _aim_ring != null:
+		return
+	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.albedo_color = Color(0.4, 0.85, 1.0, 0.9)
+	m.no_depth_test = true
+	_aim_ring = MeshInstance3D.new()
+	var tor: TorusMesh = TorusMesh.new()
+	tor.inner_radius = TP_STRIKE_RADIUS - 0.15
+	tor.outer_radius = TP_STRIKE_RADIUS
+	tor.rings = 40
+	tor.ring_segments = 4
+	_aim_ring.mesh = tor
+	_aim_ring.material_override = m
+	_aim_ring.scale = Vector3(1.0, 0.2, 1.0)
+	_aim_ring.top_level = true
+	_aim_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_aim_ring)
+	var m2: StandardMaterial3D = m.duplicate() as StandardMaterial3D
+	m2.albedo_color = Color(1.0, 0.25, 0.2, 0.95)
+	_aim_mark = MeshInstance3D.new()
+	var cone: CylinderMesh = CylinderMesh.new()
+	cone.top_radius = 0.45
+	cone.bottom_radius = 0.0
+	cone.height = 0.7
+	cone.radial_segments = 4
+	_aim_mark.mesh = cone
+	_aim_mark.material_override = m2
+	_aim_mark.top_level = true
+	_aim_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_aim_mark)
+	_aim_ring.visible = false
+	_aim_mark.visible = false
+
+
+func _hide_aim() -> void:
+	_tp_aiming = false
+	if _aim_ring != null:
+		_aim_ring.visible = false
+		_aim_mark.visible = false
+
+
+## Relâchement du bouton TP en mode ciblage : téléportation + frappe de zone à l'arrivée.
+func _teleport_aimed() -> void:
+	_hide_aim()
+	if _tp_cd > 0.0 and not (_tp_window > 0.0 and _tp_chain < TP_CHAIN):
+		announce.emit("Téléportation dans %d s" % int(ceil(_tp_cd)))
+		return
+	_end_attack()
+	var col: Color = _weapon_color()
+	CombatFx.afterimage(get_parent(), global_position, col)
+	global_position = _aim_dest
+	velocity = Vector3.ZERO
+	if _aim_target != null and is_instance_valid(_aim_target):
+		var look: Vector3 = _aim_target.global_position - _aim_dest
+		face_yaw = atan2(-look.x, -look.z)
+		rig.rotation.y = face_yaw
+	CombatFx.bolt(get_parent(), _aim_dest + Vector3(0.0, 18.0, 0.0), _aim_dest + Vector3(0.0, 0.2, 0.0), col, 0.3)
+	CombatFx.ring(get_parent(), _aim_dest + Vector3(0.0, 0.15, 0.0), col, TP_STRIKE_RADIUS, 0.35)
+	CombatFx.ring(get_parent(), _aim_dest + Vector3(0.0, 0.3, 0.0), Color(1, 1, 1, 0.8), TP_STRIKE_RADIUS * 0.6, 0.25)
+	var hits: int = 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var dd: float = Vector2(en.global_position.x - _aim_dest.x, en.global_position.z - _aim_dest.z).length()
+		if dd < TP_STRIKE_RADIUS and absf(en.global_position.y - _aim_dest.y) < 3.0:
+			en.call("take_damage", 32.0 * _dmg_mult() * lerpf(1.4, 0.7, dd / TP_STRIKE_RADIUS), _aim_dest)
+			CombatFx.spark(get_parent(), en.global_position + Vector3(0.0, 1.0, 0.0), col, 1.2)
+			hits += 1
+	if hits > 0:
+		on_ranged_hit()
+		add_ulti(4.0 * float(hits))
+	_tp_cd = TP_COOLDOWN
+	_combo_next = 2
+	_combo_reset = 1.0
+	_pose_kind = 4
+	_pose_dur = 0.35
+	_pose_t = _pose_dur
+	Sfx.play("teleport")
+	Sfx.play("ulti_boom", 1.7)
+	if cam != null:
+		cam.call("shake", 0.45)

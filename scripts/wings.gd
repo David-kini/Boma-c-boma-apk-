@@ -9,6 +9,7 @@ const NAMES: Dictionary = {"ange": "Ailes d'ange", "demon": "Ailes de démon", "
 
 var variant: String = "ange"
 var deployed: bool = false
+var size_mult: float = 1.0     # taille (ailes plus petites pour les ennemis volants)
 var _t: float = 0.0
 var _roots: Array = []          # [Node3D, côté]
 var _k: float = 0.0             # 0 = repliées, 1 = déployées
@@ -116,7 +117,7 @@ func set_deployed(on: bool) -> void:
 
 func _process(delta: float) -> void:
 	_k = move_toward(_k, 1.0 if deployed else 0.0, delta * 3.0)
-	scale = Vector3.ONE * maxf(_k, 0.01)
+	scale = Vector3.ONE * maxf(_k, 0.01) * size_mult
 	if _k <= 0.01 and not deployed:
 		visible = false
 		return

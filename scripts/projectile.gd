@@ -49,7 +49,7 @@ func _process(delta: float) -> void:
 	var ps: Array = get_tree().get_nodes_in_group("player")
 	if not ps.is_empty():
 		var p: Node3D = ps[0] as Node3D
-		if p.global_position.distance_to(global_position - Vector3(0.0, 1.0, 0.0)) < 0.9:
+		if p.global_position.distance_to(global_position - Vector3(0.0, 1.0, 0.0)) < 0.9 and not bool(p.get("is_flying")):
 			p.call("take_damage", damage, global_position)
 			_explode()
 			return

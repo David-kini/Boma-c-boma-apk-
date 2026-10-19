@@ -23,9 +23,10 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	if args.has("quality"):
 		GameSettings.set_quality(int(args["quality"]))
 	var spots: Dictionary = {
-		"arena": Vector2(0.0, 30.0), "forest": Vector2(300.0, -300.0), "ruins": Vector2(-40.0, -228.0),
-		"boss": Vector2(-385.0, -385.0), "volcano": Vector2(-300.0, 255.0), "monsters": Vector2(280.0, 300.0),
-		"lake": Vector2(130.0, 125.0), "rocks": Vector2(380.0, 50.0), "village": Vector2(-120.0, 205.0), "camp": Vector2(18.0, 92.0),
+		"arena": Vector2(0.0, 30.0), "forest": Vector2(185.0, -170.0), "ruins": Vector2(-25.0, -140.0),
+		"boss": Vector2(-245.0, -240.0), "volcano": Vector2(-190.0, 165.0), "monsters": Vector2(175.0, 200.0),
+		"lake": Vector2(85.0, 85.0), "rocks": Vector2(225.0, 30.0), "village": Vector2(-95.0, 150.0), "camp": Vector2(18.0, 92.0),
+		"peaks": Vector2(60.0, -250.0), "pines": Vector2(-290.0, -10.0), "dark": Vector2(-150.0, -60.0),
 	}
 	if spots.has(view):
 		var s: Vector2 = spots[view]
@@ -33,24 +34,12 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		var y: float = float(w.call("ground_height", s.x, s.y)) + 0.5
 		player.global_position = Vector3(s.x, y, s.y)
 		var target: Vector2 = Vector2.ZERO if view != "arena" else Vector2(0.0, -40.0)
-		if view == "forest":
-			target = Vector2(330.0, -330.0)
-		elif view == "ruins":
-			target = Vector2(-60.0, -260.0)
-		elif view == "boss":
-			target = Vector2(-430.0, -400.0)
-		elif view == "volcano":
-			target = Vector2(-400.0, 330.0)
-		elif view == "monsters":
-			target = Vector2(300.0, 330.0)
-		elif view == "lake":
-			target = Vector2(170.0, 170.0)
-		elif view == "rocks":
-			target = Vector2(420.0, 60.0)
-		elif view == "village":
-			target = Vector2(-135.0, 150.0)
-		elif view == "camp":
-			target = Vector2(9.0, 78.0)
+		var targets: Dictionary = {"forest": Vector2(215.0, -200.0), "ruins": Vector2(-40.0, -170.0), "boss": Vector2(-275.0, -265.0),
+			"volcano": Vector2(-255.0, 215.0), "monsters": Vector2(195.0, 225.0), "lake": Vector2(118.0, 118.0),
+			"rocks": Vector2(255.0, 35.0), "village": Vector2(-105.0, 110.0), "camp": Vector2(9.0, 78.0),
+			"peaks": Vector2(115.0, -320.0), "pines": Vector2(-330.0, -25.0), "dark": Vector2(-175.0, -85.0)}
+		if targets.has(view):
+			target = targets[view]
 		var d: Vector2 = target - s
 		cam.set("yaw", atan2(-d.x, -d.y))
 		cam.set("pitch", -0.12)
@@ -123,6 +112,10 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	if args.has("menu"):
 		_open_menu_at = 25
 	shoot_at = int(args.get("shoot", "-1"))
+	if args.has("power"):
+		player.set("power_index", load("res://scripts/powers.gd").call("index_of", String(args["power"])))
+	powers_menu_at = 25 if args.has("powersmenu") else -1
+	tp_hold = args.has("tphold")
 	tp_at = int(args.get("tp", "-1"))
 	autoattack = args.has("autoattack")
 	report = args.has("report")
@@ -130,6 +123,8 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 
 var autoattack: bool = false
 var shoot_at: int = -1
+var powers_menu_at: int = -1
+var tp_hold: bool = false
 var tp_at: int = -1
 var _open_menu_at: int = -1
 var report: bool = false
@@ -163,6 +158,12 @@ func _process(delta: float) -> void:
 		GameInput.shoot_buffer = 0.2
 	if _n == tp_at:
 		GameInput.tp_buffer = 0.2
+	if tp_hold:
+		GameInput.touch_tp_held = true
+		if _n == 8:
+			GameInput.tp_buffer = 0.2
+	if _n == powers_menu_at:
+		get_parent().get("hud").call("open_powers")
 	if _n == _open_menu_at:
 		get_parent().get("hud").call("open_settings")
 	if _n == frames:

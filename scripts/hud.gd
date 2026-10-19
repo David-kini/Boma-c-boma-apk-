@@ -33,6 +33,8 @@ var boss_root: Control
 var boss_fill: ColorRect
 var boss_name: Label
 var title_screen: Control
+var powers_panel: Control
+var power_buttons: Array = []
 var _combo_pop: float = 0.0
 var _last_zone: String = ""
 var _banner_t: float = 0.0
@@ -141,7 +143,7 @@ func _ready() -> void:
 	ko_label.visible = false
 	help_label = _make_label(Vector2(20.0, 505.0), 14)
 	help_label.visible = not DisplayServer.is_touchscreen_available()
-	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J/clic : attaquer (5 coups) · F voler · T Transformation · G tir · V téléport · U attaque finale · R arme · H potion · Échap : menu"
+	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J/clic : attaquer (5 coups) · F voler · T Transformation · G pouvoir · P choix du pouvoir · V téléport (maintenir = ciblage) · U attaque finale · R arme · H potion · Échap : menu"
 	_build_boss_bar()
 	zone_banner = Label.new()
 	zone_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -158,6 +160,7 @@ func _ready() -> void:
 	overlay.name = "Commandes"
 	add_child(overlay)
 	_build_settings()
+	_build_powers()
 	_build_title()
 
 
@@ -254,6 +257,86 @@ func _build_title() -> void:
 		rep.add_theme_font_size_override("font_size", 14)
 		rep.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
 		vb.add_child(rep)
+
+
+## Menu des pouvoirs : accessible pendant le combat (le temps est ralenti, pas arrêté).
+func _build_powers() -> void:
+	var Powers: GDScript = load("res://scripts/powers.gd")
+	powers_panel = Control.new()
+	powers_panel.name = "MenuPouvoirs"
+	powers_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	powers_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	powers_panel.visible = false
+	add_child(powers_panel)
+	var dim: ColorRect = ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.0, 0.02, 0.08, 0.45)
+	powers_panel.add_child(dim)
+	var center: CenterContainer = CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	powers_panel.add_child(center)
+	var panel: PanelContainer = PanelContainer.new()
+	center.add_child(panel)
+	var margin: MarginContainer = MarginContainer.new()
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 10)
+	panel.add_child(margin)
+	var vb: VBoxContainer = VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	margin.add_child(vb)
+	var title: Label = Label.new()
+	title.text = "POUVOIRS — choisis le pouvoir du bouton POUVOIR"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	vb.add_child(title)
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 4)
+	vb.add_child(grid)
+	for i in range(int(Powers.call("count"))):
+		var d: Dictionary = Powers.call("get_def", i)
+		var b: Button = Button.new()
+		b.custom_minimum_size = Vector2(360.0, 62.0)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.add_theme_font_size_override("font_size", 13)
+		b.text = "%s\n%s\nPortée %s · durée %s · recharge %s s" % [d["name"], d["desc"], d["range"], d["time"], str(d["cd"])]
+		b.pressed.connect(_on_power_chosen.bind(i))
+		grid.add_child(b)
+		power_buttons.append(b)
+	var close: Button = Button.new()
+	close.text = "Fermer"
+	close.custom_minimum_size = Vector2(200.0, 40.0)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.add_theme_font_size_override("font_size", 18)
+	close.pressed.connect(close_powers)
+	vb.add_child(close)
+
+
+func open_powers() -> void:
+	if player == null or title_screen.visible:
+		return
+	var cur: int = int(player.get("power_index"))
+	for i in range(power_buttons.size()):
+		var b: Button = power_buttons[i]
+		b.modulate = Color(1.0, 0.9, 0.45) if i == cur else Color(1, 1, 1)
+		b.text = ("▶ " if i == cur else "") + b.text.trim_prefix("▶ ")
+	powers_panel.visible = true
+	overlay.visible = false
+	Engine.time_scale = 0.25
+
+
+func close_powers() -> void:
+	powers_panel.visible = false
+	overlay.visible = true
+	Engine.time_scale = 1.0
+
+
+func _on_power_chosen(i: int) -> void:
+	player.call("set_power", i)
+	close_powers()
 
 
 func show_title() -> void:
@@ -369,6 +452,14 @@ func _build_settings() -> void:
 	weapon_button.add_theme_font_size_override("font_size", 20)
 	weapon_button.pressed.connect(_on_weapon_button)
 	vb.add_child(weapon_button)
+	var pw: Button = Button.new()
+	pw.text = "Pouvoirs…"
+	pw.custom_minimum_size = Vector2(380.0, 40.0)
+	pw.add_theme_font_size_override("font_size", 20)
+	pw.pressed.connect(func() -> void:
+		close_settings()
+		open_powers())
+	vb.add_child(pw)
 	var resume: Button = Button.new()
 	resume.text = "Reprendre"
 	resume.custom_minimum_size = Vector2(380.0, 46.0)
@@ -457,6 +548,12 @@ func _unhandled_input(event: InputEvent) -> void:
 # ------------------------------------------------------------ affichage
 
 func _process(delta: float) -> void:
+	if GameInput.powers_menu_buffer > 0.0:
+		GameInput.powers_menu_buffer = 0.0
+		if powers_panel.visible:
+			close_powers()
+		elif not settings.visible:
+			open_powers()
 	if title_screen.visible:
 		zone_banner.modulate.a = 0.0
 		return

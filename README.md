@@ -11,6 +11,24 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Combat ninja, pouvoirs, monde resserré (v0.12)
+- Monde réduit à 920 m x 920 m (lieux rapprochés) ; nouveaux lieux : Pics enneigés
+  (sommets, sanctuaire, tour de guet), Forêt de pins (dense, camp de bûcherons), Bois sombre
+  (cercle de pierres et cristaux), Vallée rocheuse avec falaises et 2 grottes traversables.
+- Environ 55 ennemis (au lieu de 23), réapparition en 25 s ; Spectres ailés (ennemis volants).
+- Défi de l'arène : se placer sur l'étoile centrale lance 5 vagues (récompense à la fin).
+- Épéiste acrobate : garde de combat quand un ennemi est proche, coups qui avancent, coup
+  sauté, coup circulaire, salto + impact au sol, roulade (esquive), attaque plongeante
+  depuis les hauteurs, course sur les murs et rebond mural, course rapide (sprint).
+- Menu POUVOIRS (bouton POUV. / touche P, le temps ralentit) : vague d'énergie,
+  téléportation offensive, frappe de zone, vol, attaque éclair, bouclier, combo ninja ;
+  le bouton POUVOIR (touche G) lance le pouvoir choisi (recharge affichée sur le bouton).
+- Téléportation : appui court = rapide ; maintenu = ciblage (zone d'arrivée + ennemi visé),
+  relâcher = téléportation + frappe de zone. Jamais dans un mur ni hors du monde.
+- Vol : jusqu'à 60 m (au-dessus des tours), redescente en douceur, intouchable par les
+  ennemis au sol (seuls les spectres ailés peuvent attaquer en l'air).
+- Zones d'effet réduites et affichées au sol, dégâts plus forts au centre.
+
 ## Sauts, pouvoirs de combat, météo, sons (v0.11)
 - Saut : appui court = saut normal ; maintenir = saut plus haut (2,6 m) ; maintenir en
   courant = SAUT LONG (11 m, contre 6 m sans) ; appuyer en l'air = DOUBLE SAUT avec salto.

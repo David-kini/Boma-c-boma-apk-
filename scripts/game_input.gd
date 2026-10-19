@@ -15,7 +15,9 @@ var fly_buffer: float = 0.0       # bouton VOL / touche F
 var divine_buffer: float = 0.0    # bouton DIVIN / touche T
 var weapon_buffer: float = 0.0    # bouton ARME / touche R
 var heal_buffer: float = 0.0      # bouton SOIN / touche H
-var shoot_buffer: float = 0.0     # bouton TIR / touche G : vague d'énergie
+var shoot_buffer: float = 0.0     # bouton POUVOIR / touche G : pouvoir sélectionné
+var powers_menu_buffer: float = 0.0  # bouton POUVOIRS / touche P : choisir le pouvoir
+var touch_tp_held: bool = false   # bouton TP maintenu : téléportation ciblée
 var tp_buffer: float = 0.0        # bouton TP / touche V : téléportation
 var ulti_buffer: float = 0.0      # bouton ULTI / touche U : attaque finale
 var touch_jump_held: bool = false # bouton SAUT maintenu (écran tactile)
@@ -36,6 +38,7 @@ func _process(delta: float) -> void:
 	shoot_buffer = maxf(shoot_buffer - delta, 0.0)
 	tp_buffer = maxf(tp_buffer - delta, 0.0)
 	ulti_buffer = maxf(ulti_buffer - delta, 0.0)
+	powers_menu_buffer = maxf(powers_menu_buffer - delta, 0.0)
 	var k: Vector2 = Vector2(
 		float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
 		float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
@@ -65,6 +68,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				tp_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_U:
 				ulti_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_P:
+				powers_menu_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_J or ke.physical_keycode == KEY_ENTER:
 				attack_buffer = ATTACK_BUFFER
 	elif event is InputEventMouseButton:
@@ -89,6 +94,11 @@ func get_move() -> Vector2:
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	)
 	return v.limit_length(1.0)
+
+
+## Bouton de téléportation maintenu (mode ciblage).
+func tp_held() -> bool:
+	return touch_tp_held or Input.is_physical_key_pressed(KEY_V)
 
 
 ## Saut maintenu (saut plus haut / saut long en course).

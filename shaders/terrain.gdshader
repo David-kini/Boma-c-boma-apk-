@@ -31,7 +31,9 @@ void fragment() {
 	vec3 rock = mix(rx, rz, n.z / max(n.x + n.z, 0.001)) / rock_mean;
 	float steep = 1.0 - smoothstep(0.62, 0.86, n.y);
 	vec3 detail = mix(grass, rock, steep);
-	ALBEDO = COLOR.rgb * mix(vec3(1.0), detail, strength);
+	// couleurs de zone un peu désaturées (moins « fluo ») avant le détail photo
+	vec3 base = mix(vec3(dot(COLOR.rgb, vec3(0.3, 0.55, 0.15))), COLOR.rgb, 0.78) * 0.92;
+	ALBEDO = base * mix(vec3(1.0), detail, strength);
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.2;
 }

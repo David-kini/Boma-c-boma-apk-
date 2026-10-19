@@ -39,6 +39,9 @@ func build(parent: Node3D, world_data: RefCounted) -> void:
 	_monster_zone()
 	_lake()
 	_village()
+	_peaks()
+	_pine_forest()
+	_dark_woods()
 	_models_extra()
 	# nuages : dessinés par le ciel (shaders/sky_clouds.gdshader)
 	_npcs()
@@ -553,7 +556,7 @@ func _ruins() -> void:
 	# salles en ruine (murs cassés)
 	for _r in range(6):
 		var ra: float = rng.randf() * TAU
-		var rc: Vector2 = c + Vector2(cos(ra), sin(ra)) * rng.randf_range(30.0, 85.0)
+		var rc: Vector2 = c + Vector2(cos(ra), sin(ra)) * rng.randf_range(20.0, 55.0)
 		var yaw: float = rng.randf() * TAU
 		for si in range(4):
 			var side_yaw: float = yaw + float(si) * PI * 0.5
@@ -571,19 +574,19 @@ func _ruins() -> void:
 	var lying: Basis = Basis(Vector3(0.0, 0.0, 1.0), PI * 0.5)
 	for _f in range(10):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(15.0, 90.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(12.0, 60.0)
 		var b: Basis = Basis(Vector3.UP, rng.randf() * TAU) * lying
 		cyl("stone_ruin", 0.7, 0.7, 6.0, Vector3(p.x, _g(p.x, p.y) + 0.55, p.y), 10, true, b)
 	# colonnes debout cassées
 	for _s in range(14):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(15.0, 95.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(12.0, 62.0)
 		var h: float = rng.randf_range(1.5, 7.0)
 		cyl("stone_ruin", 0.65, 0.75, h, Vector3(p.x, _g(p.x, p.y) + h * 0.5 - 0.2, p.y), 10, true)
 	# arches
 	for _a in range(3):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(25.0, 80.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(18.0, 55.0)
 		var yaw: float = rng.randf() * TAU
 		var t: Vector3 = Basis(Vector3.UP, yaw) * Vector3(3.0, 0.0, 0.0)
 		var py: float = _g(p.x, p.y)
@@ -602,14 +605,14 @@ func _rocks_zone() -> void:
 	rng.seed = 11
 	for _i in range(24):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(5.0, 120.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(5.0, 75.0)
 		var s: float = rng.randf_range(1.5, 4.0)
 		sphere("stone_dark", s, Vector3(p.x, _g(p.x, p.y) + s * 0.35, p.y), 7, 4,
 			Vector3(1.0, rng.randf_range(0.6, 1.0), 1.0), true)
 	# aiguilles rocheuses
 	for _i in range(7):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(10.0, 100.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(8.0, 65.0)
 		var h: float = rng.randf_range(10.0, 18.0)
 		cyl("stone_dark", 0.5, 2.5, h, Vector3(p.x, _g(p.x, p.y) + h * 0.5 - 0.5, p.y), 7, true)
 	# arche naturelle
@@ -618,7 +621,37 @@ func _rocks_zone() -> void:
 	cyl("stone_dark", 1.4, 2.2, 9.0, Vector3(ap.x - 5.0, ay + 4.3, ap.y), 7, true)
 	cyl("stone_dark", 1.4, 2.2, 9.0, Vector3(ap.x + 5.0, ay + 4.3, ap.y), 7, true)
 	box("stone_dark", Vector3(13.0, 2.4, 3.2), Vector3(ap.x, ay + 9.4, ap.y), 0.0, true)
+	_cave(c + Vector2(25.0, -25.0), 0.7)
+	_cave(c + Vector2(-35.0, -35.0), -1.1)
 	_end()
+
+
+## Grotte : tunnel de roche de 26 m (on peut entrer et traverser), entrée large,
+## cristaux lumineux à l'intérieur. Fait de blocs de roche photo-texturés (avec collisions).
+func _cave(pos: Vector2, yaw: float) -> void:
+	var b: Basis = Basis(Vector3.UP, yaw)
+	var fwd: Vector3 = b * Vector3.FORWARD
+	var right: Vector3 = b * Vector3.RIGHT
+	var gy: float = _g(pos.x, pos.y)
+	var base: Vector3 = Vector3(pos.x, gy, pos.y)
+	var n: int = 8
+	for k in range(n):
+		var along: float = (float(k) - float(n - 1) * 0.5) * 3.3
+		var cpos: Vector3 = base + fwd * along
+		cpos.y = _g(cpos.x, cpos.z)
+		# parois et voûte (bloc par bloc, légèrement irrégulières)
+		var wob: float = sin(float(k) * 1.7) * 0.4
+		box("island_rock", Vector3(2.4, 6.5 + wob, 3.6), cpos + right * (3.6 + wob * 0.5) + Vector3(0.0, 2.6, 0.0), yaw)
+		box("island_rock", Vector3(2.4, 6.5 - wob, 3.6), cpos - right * (3.6 - wob * 0.5) + Vector3(0.0, 2.6, 0.0), yaw)
+		box("island_rock", Vector3(9.8, 2.6, 3.6), cpos + Vector3(0.0, 6.4 + wob * 0.3, 0.0), yaw, true,
+			Basis(Vector3.FORWARD, wob * 0.08))
+		# éboulis au-dessus pour en faire une colline rocheuse
+		sphere("island_rock", 4.5 + wob, cpos + Vector3(0.0, 8.0, 0.0), 7, 4, Vector3(1.4, 0.7, 1.0), false)
+		if k % 2 == 1:
+			var cp: Vector3 = cpos + right * (2.2 if k % 4 == 1 else -2.2) + Vector3(0.0, 0.6, 0.0)
+			sphere("crystal_blue" if k % 4 == 1 else "crystal_red", 0.45, cp, 4, 2, Vector3(0.7, 1.6, 0.7))
+	var entry: Vector3 = base + fwd * (float(n) * 1.65 + 3.0)
+	sign_label("Grotte", Vector3(entry.x, _g(entry.x, entry.z) + 8.5, entry.z))
 
 
 # ------------------------------------------------------------ forêt
@@ -652,15 +685,79 @@ func _volcano() -> void:
 	_begin("Volcan")
 	var v: Vector2 = WorldData.VOLCANO_CENTER
 	var lava_y: float = _g(v.x, v.y) + 2.5
-	cyl("lava", 26.0, 26.0, 0.4, Vector3(v.x, lava_y, v.y), 32, false)
+	cyl("lava", 18.0, 18.0, 0.4, Vector3(v.x, lava_y, v.y), 32, false)
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = 17
 	for _i in range(22):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = v + Vector2(cos(a), sin(a)) * rng.randf_range(50.0, 150.0)
+		var p: Vector2 = v + Vector2(cos(a), sin(a)) * rng.randf_range(34.0, 98.0)
 		var h: float = rng.randf_range(4.0, 9.0)
 		var r: float = rng.randf_range(0.8, 1.8)
 		cyl("black", 0.0, r, h, Vector3(p.x, _g(p.x, p.y) + h * 0.5 - 0.5, p.y), 6, true)
+	_end()
+
+
+# ------------------------------------------------------------ nouveaux lieux
+
+## Pics enneigés : sanctuaire au col entre les sommets, escalier de pierre, braseros bleus,
+## tour de guet sur le plus haut sommet.
+func _peaks() -> void:
+	_begin("PicsEnneiges")
+	var c: Vector2 = WorldData.PEAKS_CENTER + Vector2(5.0, 0.0)
+	var gy: float = _g(c.x, c.y)
+	cyl("castle", 9.0, 9.5, 1.2, Vector3(c.x, gy + 0.3, c.y), 12, true)
+	for k in range(6):
+		var a: float = float(k) / 6.0 * TAU
+		var pp: Vector2 = c + Vector2(cos(a), sin(a)) * 7.5
+		cyl("castle", 0.55, 0.65, 6.0, Vector3(pp.x, gy + 3.9, pp.y), 8, true)
+		box("castle_dark", Vector3(1.6, 0.5, 1.6), Vector3(pp.x, gy + 7.1, pp.y), -a, false)
+	cyl("castle_dark", 0.0, 6.5, 4.0, Vector3(c.x, gy + 9.4, c.y), 6, false)
+	cyl("gold", 0.0, 0.3, 2.0, Vector3(c.x, gy + 12.2, c.y), 6, false)
+	sphere("crystal_blue", 0.9, Vector3(c.x, gy + 2.6, c.y), 4, 2, Vector3(0.8, 1.6, 0.8))
+	# tour de guet au sommet principal
+	var top: Vector2 = WorldData.PEAKS_CENTER + Vector2(-35.0, 10.0)
+	var ty: float = _g(top.x, top.y)
+	box("castle", Vector3(4.0, 10.0, 4.0), Vector3(top.x, ty + 4.0, top.y), 0.3)
+	cyl("castle_dark", 0.0, 3.4, 5.0, Vector3(top.x, ty + 11.5, top.y), 4, false, Basis(Vector3.UP, 0.3 + PI * 0.25))
+	sign_label("Pics enneigés", Vector3(c.x, gy + 14.0, c.y))
+	_end()
+
+
+## Forêt de pins : camp de bûcherons (cabane en rondins, tas de bois, feu de camp).
+func _pine_forest() -> void:
+	_begin("ForetDePins")
+	var c: Vector2 = WorldData.ZONES["pins"]["center"]
+	var gy: float = _g(c.x, c.y)
+	box("wood", Vector3(6.0, 3.2, 4.5), Vector3(c.x, gy + 1.5, c.y), 0.4)
+	box("bark", Vector3(6.8, 0.4, 3.0), Vector3(c.x, gy + 3.5, c.y), 0.4, false, Basis(Vector3.RIGHT, 0.5))
+	box("bark", Vector3(6.8, 0.4, 3.0), Vector3(c.x, gy + 3.5, c.y), 0.4 + PI, false, Basis(Vector3.RIGHT, 0.5))
+	for k in range(5):
+		cyl("bark", 0.3, 0.3, 3.0, Vector3(c.x + 5.0, gy + 0.3 + 0.55 * float(k % 3), c.y - 3.0 + 0.6 * float(k)), 8, false,
+			Basis(Vector3.FORWARD, PI * 0.5))
+	var fp: Vector2 = c + Vector2(-3.0, 6.0)
+	var fy: float = _g(fp.x, fp.y)
+	for k in range(6):
+		var a: float = float(k) / 6.0 * TAU
+		sphere("stone_dark", 0.35, Vector3(fp.x + cos(a) * 1.0, fy + 0.15, fp.y + sin(a) * 1.0), 6, 4)
+	sphere("fire", 0.5, Vector3(fp.x, fy + 0.5, fp.y), 6, 4, Vector3(1.0, 1.6, 1.0))
+	sign_label("Forêt de pins", Vector3(c.x, gy + 5.5, c.y))
+	_end()
+
+
+## Bois sombre : cercle de pierres levées avec cristaux violets lumineux.
+func _dark_woods() -> void:
+	_begin("BoisSombre")
+	var c: Vector2 = WorldData.ZONES["bois_sombre"]["center"]
+	for k in range(8):
+		var a: float = float(k) / 8.0 * TAU
+		var pp: Vector2 = c + Vector2(cos(a), sin(a)) * 9.0
+		var py: float = _g(pp.x, pp.y)
+		box("statue", Vector3(1.4, 4.5, 0.9), Vector3(pp.x, py + 1.9, pp.y), -a)
+		sphere("crystal_red" if k % 2 == 0 else "crystal_blue", 0.35, Vector3(pp.x, py + 4.6, pp.y), 4, 2, Vector3(0.8, 1.5, 0.8))
+	var gy: float = _g(c.x, c.y)
+	cyl("statue", 2.2, 2.6, 0.8, Vector3(c.x, gy + 0.2, c.y), 10, true)
+	sphere("crystal_blue", 0.8, Vector3(c.x, gy + 2.0, c.y), 4, 2, Vector3(0.8, 1.7, 0.8))
+	sign_label("Bois sombre", Vector3(c.x, gy + 4.5, c.y))
 	_end()
 
 
@@ -721,13 +818,13 @@ func _monster_zone() -> void:
 	# pieux en bois
 	for _k in range(16):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(20.0, 110.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(15.0, 70.0)
 		box("wood", Vector3(0.25, 3.0, 0.25), Vector3(p.x, _g(p.x, p.y) + 1.1, p.y), rng.randf() * TAU,
 			true, Basis(Vector3.RIGHT, 0.6))
 	# cages
 	for _k in range(4):
 		var a: float = rng.randf() * TAU
-		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(15.0, 80.0)
+		var p: Vector2 = c + Vector2(cos(a), sin(a)) * rng.randf_range(12.0, 55.0)
 		var py: float = _g(p.x, p.y)
 		for cx in [-1.2, 1.2]:
 			for cz in [-1.2, 1.2]:

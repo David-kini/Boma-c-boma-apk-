@@ -679,6 +679,49 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["arm_r"] = Vector3(0.6, 0.0, 0.5)
 			tg["spine"] = Vector3(-0.1, 0.0, 0.0)
 			tg["coat"] = Vector3(-0.45, 0.0, 0.0)
+		"guard":
+			# garde d'épéiste : jambes fléchies et écartées, épée levée au-dessus de l'épaule,
+			# pointe vers l'ennemi, main gauche tendue devant ; léger balancement
+			var sw: float = sin(t * 2.4)
+			tg["thigh_l"] = Vector3(0.55, 0.0, -0.22)
+			tg["thigh_r"] = Vector3(-0.25, 0.0, 0.22)
+			tg["shin_l"] = Vector3(-0.75, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-0.55, 0.0, 0.0)
+			tg["spine"] = Vector3(-0.12, 0.25, 0.0)
+			tg["chest"] = Vector3(0.0, 0.15 + sw * 0.03, 0.0)
+			tg["head"] = Vector3(0.1, -0.35, 0.0)
+			tg["arm_r"] = Vector3(1.7, 0.0, 0.45)
+			tg["fore_r"] = Vector3(1.3, 0.0, 0.0)
+			tg["hand_r"] = Vector3(0.9, 0.0, 0.0)
+			tg["arm_l"] = Vector3(1.1, 0.0, -0.35)
+			tg["fore_l"] = Vector3(0.25, 0.0, 0.0)
+			tg["coat"] = Vector3(0.1 + sw * 0.04, 0.0, 0.0)
+			hy = -0.14 + sw * 0.01
+		"plunge":
+			# attaque plongeante : genoux repliés, épée pointée vers le sol à deux mains
+			tg["thigh_l"] = Vector3(1.2, 0.0, -0.1)
+			tg["thigh_r"] = Vector3(0.9, 0.0, 0.1)
+			tg["shin_l"] = Vector3(-1.6, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-1.3, 0.0, 0.0)
+			tg["spine"] = Vector3(0.35, 0.0, 0.0)
+			tg["arm_r"] = Vector3(1.0, 0.0, 0.2)
+			tg["fore_r"] = Vector3(0.7, 0.0, 0.0)
+			tg["hand_r"] = Vector3(2.7, 0.0, 0.0)
+			tg["arm_l"] = Vector3(0.5, 0.0, -0.3)
+			tg["fore_l"] = Vector3(0.9, 0.0, 0.0)
+			tg["coat"] = Vector3(-1.2, 0.0, 0.0)
+		"wallrun":
+			# course sur le mur : foulées rapides, buste penché vers le haut
+			phase += delta * 16.0
+			var ws: float = sin(phase)
+			tg["thigh_l"] = Vector3(1.0 + ws * 0.6, 0.0, 0.0)
+			tg["thigh_r"] = Vector3(1.0 - ws * 0.6, 0.0, 0.0)
+			tg["shin_l"] = Vector3(-1.0 - maxf(ws, 0.0), 0.0, 0.0)
+			tg["shin_r"] = Vector3(-1.0 - maxf(-ws, 0.0), 0.0, 0.0)
+			tg["spine"] = Vector3(-0.3, 0.0, 0.0)
+			tg["arm_l"] = Vector3(-ws * 0.8, 0.0, -0.3)
+			tg["arm_r"] = Vector3(ws * 0.5 - 0.4, 0.0, 0.4)
+			tg["coat"] = Vector3(0.4, 0.0, 0.0)
 		"flip":
 			# double saut : corps groupé pour le salto
 			tg["thigh_l"] = Vector3(1.7, 0.0, -0.05)

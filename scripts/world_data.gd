@@ -1,43 +1,51 @@
 extends RefCounted
-## Données du monde : 1414 m x 1414 m (environ 2 km²), zones, relief, chemins, lac et couleurs.
+## Données du monde : 920 m x 920 m (monde resserré : les lieux sont proches les uns des autres),
+## zones, relief, chemins, lac et couleurs.
 ## Le relief est calculé par des fonctions de bruit : rien n'est stocké en mémoire.
 
-const HALF: float = 707.0
+const HALF: float = 460.0
 const ARENA_RADIUS: float = 48.0
-const VOLCANO_CENTER: Vector2 = Vector2(-400.0, 330.0)
-const LAKE_CENTER: Vector2 = Vector2(170.0, 170.0)
-const LAKE_RADIUS: float = 55.0
+const VOLCANO_CENTER: Vector2 = Vector2(-255.0, 215.0)
+const LAKE_CENTER: Vector2 = Vector2(118.0, 118.0)
+const LAKE_RADIUS: float = 42.0
+const PEAKS_CENTER: Vector2 = Vector2(115.0, -320.0)
 const WATER_LEVEL: float = -1.0
 const SPAWN: Vector2 = Vector2(0.0, 70.0)
 const CAMP: Vector2 = Vector2(9.0, 78.0)
-const VILLAGE: Vector2 = Vector2(-135.0, 150.0)
-const VILLAGE_RADIUS: float = 42.0
+const VILLAGE: Vector2 = Vector2(-105.0, 110.0)
+const VILLAGE_RADIUS: float = 38.0
 
 ## Zones : centre (x, z) et rayon en mètres.
 const ZONES: Dictionary = {
 	"arene": {"name": "Arène", "center": Vector2(0.0, 0.0), "radius": 55.0},
-	"plaine": {"name": "Plaine de départ", "center": Vector2(0.0, 120.0), "radius": 240.0},
-	"lac": {"name": "Lac Miroir", "center": Vector2(170.0, 170.0), "radius": 75.0},
-	"village": {"name": "Village de Boma", "center": Vector2(-135.0, 150.0), "radius": 60.0},
-	"ruines": {"name": "Ruines anciennes", "center": Vector2(-60.0, -260.0), "radius": 120.0},
-	"rochers": {"name": "Zone rocheuse", "center": Vector2(420.0, 60.0), "radius": 130.0},
-	"foret": {"name": "Forêt fantastique", "center": Vector2(330.0, -330.0), "radius": 170.0},
-	"volcan": {"name": "Zone volcanique", "center": Vector2(-400.0, 330.0), "radius": 170.0},
-	"monstres": {"name": "Zone des monstres", "center": Vector2(300.0, 330.0), "radius": 140.0},
-	"boss": {"name": "Repaire du boss", "center": Vector2(-430.0, -400.0), "radius": 90.0},
+	"plaine": {"name": "Plaine de départ", "center": Vector2(0.0, 95.0), "radius": 150.0},
+	"lac": {"name": "Lac Miroir", "center": Vector2(118.0, 118.0), "radius": 60.0},
+	"village": {"name": "Village de Boma", "center": Vector2(-105.0, 110.0), "radius": 55.0},
+	"ruines": {"name": "Ruines anciennes", "center": Vector2(-40.0, -170.0), "radius": 80.0},
+	"rochers": {"name": "Vallée rocheuse", "center": Vector2(255.0, 35.0), "radius": 85.0},
+	"foret": {"name": "Forêt fantastique", "center": Vector2(215.0, -200.0), "radius": 100.0},
+	"volcan": {"name": "Zone volcanique", "center": Vector2(-255.0, 215.0), "radius": 105.0},
+	"monstres": {"name": "Zone des monstres", "center": Vector2(195.0, 225.0), "radius": 85.0},
+	"boss": {"name": "Repaire du boss", "center": Vector2(-275.0, -265.0), "radius": 65.0},
+	"montagnes": {"name": "Pics enneigés", "center": Vector2(115.0, -320.0), "radius": 95.0},
+	"pins": {"name": "Forêt de pins", "center": Vector2(-330.0, -25.0), "radius": 90.0},
+	"bois_sombre": {"name": "Bois sombre", "center": Vector2(-175.0, -85.0), "radius": 65.0},
 }
 
 ## Chemins de terre : segments [départ, arrivée].
 const PATHS: Array = [
-	[Vector2(0.0, 48.0), Vector2(0.0, 140.0)],
-	[Vector2(0.0, 140.0), Vector2(280.0, 310.0)],
-	[Vector2(0.0, 140.0), Vector2(115.0, 150.0)],
-	[Vector2(0.0, 140.0), Vector2(-100.0, 150.0)],
-	[Vector2(0.0, -48.0), Vector2(-60.0, -250.0)],
-	[Vector2(-60.0, -250.0), Vector2(-395.0, -385.0)],
-	[Vector2(48.0, 0.0), Vector2(400.0, 55.0)],
-	[Vector2(34.0, -34.0), Vector2(310.0, -310.0)],
-	[Vector2(-48.0, 0.0), Vector2(-320.0, 260.0)],
+	[Vector2(0.0, 48.0), Vector2(0.0, 120.0)],
+	[Vector2(0.0, 120.0), Vector2(180.0, 210.0)],
+	[Vector2(0.0, 120.0), Vector2(72.0, 112.0)],
+	[Vector2(0.0, 120.0), Vector2(-72.0, 110.0)],
+	[Vector2(0.0, -48.0), Vector2(-40.0, -160.0)],
+	[Vector2(-40.0, -160.0), Vector2(-245.0, -245.0)],
+	[Vector2(-40.0, -160.0), Vector2(70.0, -255.0)],
+	[Vector2(48.0, 0.0), Vector2(240.0, 32.0)],
+	[Vector2(34.0, -34.0), Vector2(200.0, -185.0)],
+	[Vector2(-48.0, 0.0), Vector2(-205.0, 175.0)],
+	[Vector2(-40.0, -20.0), Vector2(-160.0, -78.0)],
+	[Vector2(-160.0, -78.0), Vector2(-315.0, -30.0)],
 ]
 
 var n_hill: FastNoiseLite
@@ -68,7 +76,7 @@ func height_at(x: float, z: float) -> float:
 	var edge: float = maxf(absf(x), absf(z))
 	# collines : douces dans la plaine, plus fortes ailleurs
 	var hills: float = n_hill.get_noise_2d(x, z) * 16.0 + n_detail.get_noise_2d(x, z) * 1.4
-	var calm: float = 1.0 - smoothstep(70.0, 300.0, r)
+	var calm: float = 1.0 - smoothstep(70.0, 200.0, r)
 	hills *= 1.0 - calm * 0.72
 	# chemins légèrement aplanis
 	var pd: float = path_distance(x, z)
@@ -84,12 +92,27 @@ func height_at(x: float, z: float) -> float:
 	hills = lerpf(hills, -2.4, lake)
 	# montagnes qui ferment la zone de jeu sur tout le pourtour
 	var ridge: float = 0.5 + 0.5 * n_ridge.get_noise_2d(x, z)
-	var mountains: float = smoothstep(500.0, 690.0, edge) * (50.0 + 170.0 * ridge)
+	var mountains: float = smoothstep(330.0, 450.0, edge) * (50.0 + 150.0 * ridge)
 	# volcan : cône avec cratère
 	var vd: float = Vector2(x, z).distance_to(VOLCANO_CENTER)
-	var cone: float = 75.0 * (1.0 - smoothstep(0.0, 160.0, vd))
-	cone -= 28.0 * (1.0 - smoothstep(0.0, 38.0, vd))
-	return hills + mountains + maxf(cone, 0.0)
+	var cone: float = 60.0 * (1.0 - smoothstep(0.0, 105.0, vd))
+	cone -= 24.0 * (1.0 - smoothstep(0.0, 26.0, vd))
+	# pics enneigés : trois sommets escarpés et un col au milieu
+	var peaks: float = 0.0
+	for pk in [[Vector2(-35.0, 10.0), 115.0, 55.0], [Vector2(40.0, -25.0), 95.0, 48.0], [Vector2(10.0, 45.0), 70.0, 40.0]]:
+		var pc: Vector2 = PEAKS_CENTER + (pk[0] as Vector2)
+		var pdist: float = Vector2(x, z).distance_to(pc)
+		var t: float = 1.0 - smoothstep(0.0, float(pk[2]), pdist)
+		var rough: float = n_ridge.get_noise_2d(x * 3.5, z * 3.5) * 22.0 + n_detail.get_noise_2d(x * 1.7, z * 1.7) * 6.0
+		peaks = maxf(peaks, float(pk[1]) * pow(t, 1.5) * (0.8 + 0.4 * ridge) + rough * smoothstep(0.05, 0.6, t))
+	# collines boisées plus marquées dans la forêt de pins
+	var pine: float = zone_weight("pins", x, z)
+	hills += pine * n_hill.get_noise_2d(x * 2.0, z * 2.0) * 10.0
+	# vallée rocheuse : fond plat entouré de falaises
+	var vdist: float = Vector2(x, z).distance_to(ZONES["rochers"]["center"])
+	var cliff: float = smoothstep(55.0, 75.0, vdist) * (1.0 - smoothstep(80.0, 105.0, vdist)) * 22.0 * (0.7 + 0.6 * ridge)
+	hills += cliff * (1.0 - smoothstep(0.0, 7.0, pd))
+	return hills + mountains + maxf(cone, 0.0) + peaks
 
 
 ## Normale approchée du terrain (composante verticale : 1 = plat, 0 = mur).
@@ -136,7 +159,9 @@ func is_reserved(x: float, z: float) -> bool:
 		return true
 	if p.distance_to(VILLAGE) < VILLAGE_RADIUS + 6.0:
 		return true
-	if p.distance_to(VOLCANO_CENTER) < 40.0:
+	if p.distance_to(VOLCANO_CENTER) < 30.0:
+		return true
+	if p.distance_to(ZONES["bois_sombre"]["center"]) < 14.0 or p.distance_to(ZONES["pins"]["center"]) < 14.0:
 		return true
 	return path_distance(x, z) < 4.5
 
@@ -165,6 +190,15 @@ func color_at(x: float, z: float, h: float, ny: float) -> Color:
 	var ro: float = zone_weight("rochers", x, z)
 	if ro > 0.0:
 		c = c.lerp(rock, ro * 0.8)
+	var pn: float = zone_weight("pins", x, z)
+	if pn > 0.0:
+		c = c.lerp(Color(0.20, 0.34, 0.17).lerp(Color(0.30, 0.30, 0.18), n), pn * 0.85)
+	var bs: float = zone_weight("bois_sombre", x, z)
+	if bs > 0.0:
+		c = c.lerp(Color(0.13, 0.15, 0.16).lerp(Color(0.20, 0.14, 0.22), n), bs * 0.9)
+	var mo: float = zone_weight("montagnes", x, z)
+	if mo > 0.0:
+		c = c.lerp(rock.lerp(Color(0.5, 0.52, 0.55), 0.4), mo * 0.5)
 	# chemins de terre
 	var pd: float = path_distance(x, z)
 	c = c.lerp(Color(0.52, 0.43, 0.30), (1.0 - smoothstep(2.5, 4.5, pd)) * 0.9)
@@ -174,7 +208,7 @@ func color_at(x: float, z: float, h: float, ny: float) -> Color:
 	# pentes rocheuses, neige en altitude
 	var slope: float = 1.0 - smoothstep(0.62, 0.86, ny)
 	c = c.lerp(rock, slope)
-	c = c.lerp(Color(0.85, 0.87, 0.92), smoothstep(150.0, 210.0, h) * (1.0 - slope * 0.5))
+	c = c.lerp(Color(0.88, 0.90, 0.95), smoothstep(60.0, 95.0, h) * (1.0 - slope * 0.45))
 	var a: float = 1.0 - smoothstep(ARENA_RADIUS - 4.0, ARENA_RADIUS + 6.0, r)
 	c = c.lerp(Color(0.52, 0.50, 0.50), a)
 	return c

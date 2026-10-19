@@ -34,6 +34,8 @@ const SLEEP_DIST: float = 60.0
 ## Modèles aventuriers : ils portent tous leurs accessoires ; on ne garde que ceux-ci.
 @export var keep_props: PackedStringArray = PackedStringArray()
 @export var tint: Color = Color(1, 1, 1)   # teinte "ennemie" (assombrit le modèle)
+## Ennemi volant (ailes de démon) : vole à la hauteur du joueur et peut le frapper en vol.
+@export var flying: bool = false
 
 var hp: float = 60.0
 var state: String = "idle"
@@ -75,6 +77,8 @@ func _ready() -> void:
 		if _ap != null and _ap.has_animation(a):
 			_ap.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	_attach_weapon()
+	if flying:
+		_attach_wings()
 	_build_bar()
 	_play("Idle")
 
@@ -143,6 +147,31 @@ func _attach_weapon() -> void:
 			ha.add_child(spike)
 
 
+func _attach_wings() -> void:
+	var sk: Skeleton3D = null
+	for n in _model.find_children("*", "Skeleton3D", true, false):
+		sk = n as Skeleton3D
+		break
+	if sk == null:
+		return
+	var bone: String = "chest" if sk.find_bone("chest") >= 0 else ("spine" if sk.find_bone("spine") >= 0 else "")
+	if bone == "":
+		return
+	var att: BoneAttachment3D = BoneAttachment3D.new()
+	sk.add_child(att)
+	att.bone_name = bone
+	var w: Node3D = load("res://scripts/wings.gd").new()
+	w.set("variant", "demon")
+	w.position = Vector3(0.0, 0.1, -0.25)
+	w.rotation.y = PI
+	w.set("size_mult", 0.55)
+	att.add_child(w)
+	w.call("set_deployed", true)
+	for a in ["Jump_Idle"]:
+		if _ap != null and _ap.has_animation(a):
+			_ap.get_animation(a).loop_mode = Animation.LOOP_LINEAR
+
+
 func _bar_mat(c: Color) -> StandardMaterial3D:
 	var m: StandardMaterial3D = StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -205,13 +234,23 @@ func _physics_process(delta: float) -> void:
 		return
 	var to_p: Vector3 = player.global_position - global_position
 	var dist: float = Vector2(to_p.x, to_p.z).length()
+	# joueur en vol au-dessus : les ennemis au sol ne peuvent pas l'atteindre
+	var out_of_reach: bool = to_p.y > 1.6 and bool(player.get("is_flying")) and not flying
 	if dist > SLEEP_DIST and state != "dead":
 		if _ap != null and _ap.is_playing():
 			_ap.pause()
 		return
 	if _ap != null and not _ap.is_playing() and state != "dead":
 		_ap.play()
-	if not is_on_floor():
+	if flying and state != "dead":
+		# vol : reste à 3,5 m du sol au repos, suit l'altitude du joueur en poursuite
+		var gh0: float = float(world.call("ground_height", global_position.x, global_position.z)) if world != null else 0.0
+		var want_y: float = gh0 + 3.5
+		if state != "idle":
+			want_y = maxf(gh0 + 1.2, player.global_position.y + 0.3)
+		want_y += sin(Time.get_ticks_msec() * 0.003 + float(get_instance_id() % 7)) * 0.3
+		velocity.y = clampf((want_y - global_position.y) * 2.5, -8.0, 8.0)
+	elif not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	_t += delta
 	_cooldown -= delta
@@ -227,6 +266,8 @@ func _physics_process(delta: float) -> void:
 				state = "idle"
 			elif is_boss and phase >= 2 and _special_cd <= 0.0 and dist < 9.0:
 				_start_slam()
+			elif out_of_reach:
+				pass        # il regarde le joueur voler au-dessus de lui, sans pouvoir frapper
 			elif ranged and dist <= 13.0 and dist > attack_range and _cooldown <= 0.0:
 				state = "cast"
 				_t = 0.0
@@ -244,14 +285,17 @@ func _physics_process(delta: float) -> void:
 				var dir: Vector3 = Vector3(to_p.x, 0.0, to_p.z).normalized()
 				var keep: float = 9.0 if ranged else attack_range * 0.8
 				hv = dir * speed if dist > keep else Vector3.ZERO
-				_play("Running_A" if hv.length() > 0.1 else "Idle_Combat")
+				if flying:
+					_play("Jump_Idle" if _ap != null and _ap.has_animation("Jump_Idle") else "Idle_Combat")
+				else:
+					_play("Running_A" if hv.length() > 0.1 else "Idle_Combat")
 		"attack":
 			if _t < 0.45:
 				_face(player.global_position, delta, 6.0)
 			if not _hit_done and _t >= hit_time:
 				_hit_done = true
 				var fwd: Vector3 = -global_transform.basis.z
-				if dist <= attack_range + 0.6 and fwd.dot(Vector3(to_p.x, 0.0, to_p.z).normalized()) > 0.3:
+				if dist <= attack_range + 0.6 and absf(to_p.y) < 1.6 and fwd.dot(Vector3(to_p.x, 0.0, to_p.z).normalized()) > 0.3:
 					player.call("take_damage", damage, global_position)
 			if _t >= attack_time:
 				state = "chase"
