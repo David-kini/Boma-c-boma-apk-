@@ -679,6 +679,47 @@ func animate(delta: float, state: String, speed: float) -> void:
 			tg["arm_r"] = Vector3(0.6, 0.0, 0.5)
 			tg["spine"] = Vector3(-0.1, 0.0, 0.0)
 			tg["coat"] = Vector3(-0.45, 0.0, 0.0)
+		"flip":
+			# double saut : corps groupé pour le salto
+			tg["thigh_l"] = Vector3(1.7, 0.0, -0.05)
+			tg["thigh_r"] = Vector3(1.6, 0.0, 0.05)
+			tg["shin_l"] = Vector3(-2.1, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-2.0, 0.0, 0.0)
+			tg["spine"] = Vector3(0.45, 0.0, 0.0)
+			tg["head"] = Vector3(0.3, 0.0, 0.0)
+			tg["arm_l"] = Vector3(1.2, 0.0, -0.3)
+			tg["fore_l"] = Vector3(1.6, 0.0, 0.0)
+			tg["arm_r"] = Vector3(1.0, 0.0, 0.4)
+			tg["fore_r"] = Vector3(1.2, 0.0, 0.0)
+			tg["coat"] = Vector3(-0.3, 0.0, 0.0)
+			hy = 0.15
+		"longjump":
+			# saut long : buste en avant, épée tendue, jambes étirées
+			tg["spine"] = Vector3(-0.55, 0.0, 0.0)
+			tg["head"] = Vector3(0.45, 0.0, 0.0)
+			tg["thigh_l"] = Vector3(0.9, 0.0, -0.05)
+			tg["shin_l"] = Vector3(-0.9, 0.0, 0.0)
+			tg["thigh_r"] = Vector3(-0.7, 0.0, 0.05)
+			tg["shin_r"] = Vector3(-0.3, 0.0, 0.0)
+			tg["arm_r"] = Vector3(1.4, 0.0, 0.3)
+			tg["fore_r"] = Vector3(0.2, 0.0, 0.0)
+			tg["arm_l"] = Vector3(-0.6, 0.0, -0.6)
+			tg["coat"] = Vector3(-1.1 + sin(t * 20.0) * 0.08, 0.0, 0.0)
+		"ultimate":
+			# attaque finale : suspendu dans les airs, épée levée vers le ciel
+			var up: float = sin(t * 9.0) * 0.05
+			tg["arm_r"] = Vector3(3.0, 0.0, 0.1)
+			tg["fore_r"] = Vector3(0.1, 0.0, 0.0)
+			tg["hand_r"] = Vector3(0.3, 0.0, 0.0)
+			tg["arm_l"] = Vector3(0.6, 0.0, -1.2 + up)
+			tg["fore_l"] = Vector3(0.3, 0.0, 0.0)
+			tg["spine"] = Vector3(0.18, 0.0, 0.0)
+			tg["head"] = Vector3(-0.35, 0.0, 0.0)
+			tg["thigh_l"] = Vector3(0.25, 0.0, -0.12)
+			tg["thigh_r"] = Vector3(-0.1, 0.0, 0.12)
+			tg["shin_l"] = Vector3(-0.6, 0.0, 0.0)
+			tg["shin_r"] = Vector3(-0.3, 0.0, 0.0)
+			tg["coat"] = Vector3(-0.7 + sin(t * 14.0) * 0.1, 0.0, 0.0)
 		"fall":
 			tg["thigh_l"] = Vector3(0.3, 0.0, 0.0)
 			tg["thigh_r"] = Vector3(-0.2, 0.0, 0.0)

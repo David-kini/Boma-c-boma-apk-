@@ -15,6 +15,10 @@ var fly_buffer: float = 0.0       # bouton VOL / touche F
 var divine_buffer: float = 0.0    # bouton DIVIN / touche T
 var weapon_buffer: float = 0.0    # bouton ARME / touche R
 var heal_buffer: float = 0.0      # bouton SOIN / touche H
+var shoot_buffer: float = 0.0     # bouton TIR / touche G : vague d'énergie
+var tp_buffer: float = 0.0        # bouton TP / touche V : téléportation
+var ulti_buffer: float = 0.0      # bouton ULTI / touche U : attaque finale
+var touch_jump_held: bool = false # bouton SAUT maintenu (écran tactile)
 var zoom_delta: float = 0.0              # >0 = éloigner la caméra
 
 
@@ -29,6 +33,9 @@ func _process(delta: float) -> void:
 	divine_buffer = maxf(divine_buffer - delta, 0.0)
 	weapon_buffer = maxf(weapon_buffer - delta, 0.0)
 	heal_buffer = maxf(heal_buffer - delta, 0.0)
+	shoot_buffer = maxf(shoot_buffer - delta, 0.0)
+	tp_buffer = maxf(tp_buffer - delta, 0.0)
+	ulti_buffer = maxf(ulti_buffer - delta, 0.0)
 	var k: Vector2 = Vector2(
 		float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
 		float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
@@ -52,6 +59,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				weapon_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_H:
 				heal_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_G:
+				shoot_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_V:
+				tp_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_U:
+				ulti_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_J or ke.physical_keycode == KEY_ENTER:
 				attack_buffer = ATTACK_BUFFER
 	elif event is InputEventMouseButton:
@@ -76,6 +89,11 @@ func get_move() -> Vector2:
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	)
 	return v.limit_length(1.0)
+
+
+## Saut maintenu (saut plus haut / saut long en course).
+func jump_held() -> bool:
+	return touch_jump_held or Input.is_physical_key_pressed(KEY_SPACE)
 
 
 func wants_run() -> bool:

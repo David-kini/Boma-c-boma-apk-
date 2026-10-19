@@ -3,6 +3,9 @@ extends CharacterBody3D
 ## récupération après une chute, COMBAT : combo d'épée en 5 coups avec visée
 ## automatique, points de vie, énergie, mort et réapparition ; VOL magique de 10 s ;
 ## TRANSFORMATION DIVINE de 10 s ; 10 armes ; XP, niveaux et sauvegarde.
+## Saut : simple, DOUBLE saut (salto) en l'air, saut plus haut en maintenant, SAUT LONG
+## en maintenant pendant la course. TIR : vague d'énergie à distance. TP : téléportation
+## derrière l'ennemi + coup (enchaînable 3 fois). ULTI : attaque finale (pluie d'éclairs).
 ## Déplacement relatif à la caméra. Origine = pieds.
 
 signal hp_changed(hp: float, max_hp: float)
@@ -11,6 +14,7 @@ signal combo_changed(count: int)
 signal level_changed(level: int, xp: int, need: int)
 signal announce(text: String)
 signal inventory_changed(gold: int, potions: int)
+signal ulti_changed(value: float)
 
 const PlayerRig = preload("res://scripts/player_rig.gd")
 const Sword = preload("res://scripts/sword.gd")
@@ -19,6 +23,7 @@ const Wings = preload("res://scripts/wings.gd")
 const DivineAura = preload("res://scripts/divine_aura.gd")
 const Weapons = preload("res://scripts/weapons.gd")
 const SaveGame = preload("res://scripts/save_game.gd")
+const PlayerShot = preload("res://scripts/player_shot.gd")
 
 ## Combo : durée (s), instant du coup (fraction), dégâts, portée (m), angle (cos mini,
 ## -1 = tout autour), élan vers l'avant (m/s)
@@ -46,6 +51,16 @@ const DODGE_TIME: float = 0.35
 const DODGE_COOLDOWN: float = 0.7
 const HARD_LAND_SPEED: float = 13.0
 const LAND_TIME: float = 0.4
+const DOUBLE_JUMP_VELOCITY: float = 7.6
+const JUMP_HOLD_MAX: float = 0.28      # durée max où maintenir le saut le prolonge
+const LONG_JUMP_SPEED: float = 11.5    # vitesse horizontale du saut long
+const FLIP_TIME: float = 0.45
+const SHOT_COOLDOWN: float = 0.55
+const TP_RANGE: float = 14.0
+const TP_COOLDOWN: float = 2.5
+const TP_CHAIN: int = 3
+const ULTI_MAX: float = 100.0
+const ULTI_TIME: float = 1.7
 
 var cam: Node3D = null
 var world: Node3D = null
@@ -102,6 +117,24 @@ const POTION_HEAL: float = 50.0
 var gold: int = 0
 var potions: int = 1
 var coat_name: String = "Noir"
+# --- saut, tir, téléportation, ultime
+var _jumps: int = 0
+var _jump_hold: float = 0.0
+var _holding_jump: bool = false
+var long_jump: bool = false
+var _flip_t: float = 0.0
+var _shot_cd: float = 0.0
+var _pose_t: float = 0.0          # pose d'attaque hors combo (tir, téléportation)
+var _pose_dur: float = 0.3
+var _pose_kind: int = 1
+var _tp_cd: float = 0.0
+var _tp_chain: int = 0
+var _tp_window: float = 0.0
+var _tp_last: Node3D = null
+var ulti: float = 0.0
+var ulti_t: float = -1.0          # >= 0 pendant l'attaque finale
+var _ulti_strikes: int = 0
+var _ulti_y: float = 0.0
 
 
 func _ready() -> void:
@@ -194,11 +227,25 @@ func _physics_process(delta: float) -> void:
 	_land_t -= delta
 
 	if not on_floor:
-		velocity.y = maxf(velocity.y - GRAVITY * delta, -MAX_FALL)
+		var g: float = GRAVITY
+		# saut maintenu : gravité réduite pendant la montée (saut plus haut)
+		if _holding_jump:
+			if GameInput.jump_held() and velocity.y > 0.0 and _jump_hold < JUMP_HOLD_MAX:
+				_jump_hold += delta
+				g *= 0.42
+			else:
+				if velocity.y > 0.0 and _jump_hold < 0.08:
+					velocity.y *= 0.82     # simple tapotement : saut normal
+				_holding_jump = false
+		velocity.y = maxf(velocity.y - g * delta, -MAX_FALL)
 		_fall_speed = maxf(_fall_speed, -velocity.y)
 	else:
-		if not _was_on_floor and _fall_speed > HARD_LAND_SPEED:
+		if not _was_on_floor and _fall_speed > HARD_LAND_SPEED and not long_jump:
 			_land_t = LAND_TIME
+		if not _was_on_floor:
+			_jumps = 0
+			long_jump = false
+			_flip_t = 0.0
 		_fall_speed = 0.0
 	_was_on_floor = on_floor
 
@@ -213,6 +260,11 @@ func _physics_process(delta: float) -> void:
 
 	_update_timers(delta)
 	_update_powers(delta)
+	_flip_t -= delta
+	_pose_t -= delta
+	if ulti_t >= 0.0 and not is_dead:
+		_process_ulti(delta)
+		return
 	if is_dead:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -233,6 +285,19 @@ func _physics_process(delta: float) -> void:
 			_atk_queued = true
 	if _atk_i >= 0:
 		_process_attack(delta)
+	# attaque à distance, téléportation, attaque finale
+	if GameInput.shoot_buffer > 0.0 and _shot_cd <= 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
+		GameInput.shoot_buffer = 0.0
+		_shoot()
+	if GameInput.tp_buffer > 0.0 and _hurt_t <= 0.0:
+		GameInput.tp_buffer = 0.0
+		_teleport(facing)
+	if GameInput.ulti_buffer > 0.0:
+		GameInput.ulti_buffer = 0.0
+		if ulti >= ULTI_MAX:
+			_start_ulti()
+			return
+		announce.emit("Attaque finale : jauge %d %%" % int(ulti))
 
 	if is_flying:
 		_fly_move(delta, wish, has_input)
@@ -276,15 +341,7 @@ func _physics_process(delta: float) -> void:
 			target = wish.normalized() * speed
 		if _land_t > 0.0:
 			target *= 0.3
-		var accel: float = 28.0 if on_floor else 9.0
-		velocity.x = move_toward(velocity.x, target.x, accel * delta)
-		velocity.z = move_toward(velocity.z, target.z, accel * delta)
-		# saut
-		if GameInput.jump_buffer > 0.0 and _coyote > 0.0 and _land_t <= 0.0:
-			GameInput.consume_jump()
-			velocity.y = JUMP_VELOCITY
-			_coyote = 0.0
-			Sfx.play("jump")
+		_ground_move(delta, target, wish, has_input, on_floor)
 
 	move_and_slide()
 	_update_blob()
@@ -293,12 +350,16 @@ func _physics_process(delta: float) -> void:
 	var air: bool = not is_on_floor()
 	if _hurt_t > 0.0:
 		state = "hurt"
-	elif _atk_i >= 0:
+	elif _atk_i >= 0 or _pose_t > 0.0:
 		state = "attack"
 	elif _dodge_t > 0.0:
 		state = "dodge"
 	elif _land_t > 0.0:
 		state = "land"
+	elif air and _flip_t > 0.0:
+		state = "flip"
+	elif air and long_jump:
+		state = "longjump"
 	elif air:
 		state = "jump" if velocity.y > 0.5 else "fall"
 	elif hspeed > 4.3:
@@ -310,7 +371,7 @@ func _physics_process(delta: float) -> void:
 
 	if _dodge_t > 0.0:
 		face_yaw = atan2(-_dodge_dir.x, -_dodge_dir.z)
-	elif _atk_i >= 0 or _hurt_t > 0.0:
+	elif _atk_i >= 0 or _hurt_t > 0.0 or _pose_t > 0.0:
 		pass
 	elif hspeed > 0.5:
 		face_yaw = atan2(-velocity.x, -velocity.z)
@@ -333,6 +394,12 @@ func _process(delta: float) -> void:
 		rig.rotation.y = face_yaw + spin
 	else:
 		rig.rotation.y = lerp_angle(rig.rotation.y, face_yaw, 1.0 - exp(-14.0 * delta))
+	# salto avant du double saut, tourné autour des hanches
+	var flip: float = 0.0
+	if _flip_t > 0.0:
+		flip = -TAU * ease(1.0 - _flip_t / FLIP_TIME, -1.6)
+	rig.rotation.x = flip
+	rig.position = Vector3(0.0, 0.95, 0.0) - rig.basis * Vector3(0.0, 0.95, 0.0)
 	if debug_anim != "":
 		if debug_anim.begins_with("attack"):
 			rig.set("attack_kind", int(debug_anim.substr(6, 1)))
@@ -344,6 +411,12 @@ func _process(delta: float) -> void:
 	if _atk_i >= 0:
 		rig.set("attack_kind", _atk_i)
 		rig.set("attack_t", clampf(_atk_t / _dur(_atk_i), 0.0, 1.0))
+	elif _pose_t > 0.0:
+		rig.set("attack_kind", _pose_kind)
+		rig.set("attack_t", clampf(1.0 - _pose_t / _pose_dur, 0.0, 1.0))
+	if ulti_t >= 0.0:
+		rig.call("animate", delta, "ultimate", 0.0)
+		return
 	rig.call("animate", delta, state, hspeed)
 
 
@@ -454,6 +527,7 @@ func _deal_hits(a: Dictionary) -> void:
 		combo_changed.emit(combo_count)
 		energy = minf(energy + 5.0 * float(hits), max_energy)
 		energy_changed.emit(energy, max_energy)
+		add_ulti(4.0 * float(hits))
 		if cam != null:
 			cam.call("shake", 0.35 if _atk_i == 3 else 0.15)
 
@@ -511,6 +585,13 @@ func _dmg_mult() -> float:
 
 func _update_powers(delta: float) -> void:
 	_fly_cd -= delta
+	_shot_cd -= delta
+	_tp_cd -= delta
+	if _tp_window > 0.0:
+		_tp_window -= delta
+		if _tp_window <= 0.0:
+			_tp_chain = 0
+			_tp_cd = TP_COOLDOWN
 	_autosave -= delta
 	if _autosave <= 0.0:
 		_autosave = 30.0
@@ -745,3 +826,251 @@ func set_coat(name: String) -> void:
 	rig.call("set_coat_color", name)
 	_set_layer(rig, 2)
 	save_progress()
+
+
+## Déplacement au sol / en l'air hors combat : saut, double saut, saut long.
+func _ground_move(delta: float, target: Vector3, wish: Vector3, has_input: bool, on_floor: bool) -> void:
+	var accel: float = 28.0 if on_floor else 9.0
+	if long_jump and not on_floor:
+		# saut long : on garde l'élan, contrôle léger
+		var keep: Vector3 = wish.normalized() if has_input else Vector3(velocity.x, 0.0, velocity.z).normalized()
+		target = keep * LONG_JUMP_SPEED
+		accel = 5.0
+	velocity.x = move_toward(velocity.x, target.x, accel * delta)
+	velocity.z = move_toward(velocity.z, target.z, accel * delta)
+	# saut long : bouton maintenu pendant la course
+	var hs: float = Vector2(velocity.x, velocity.z).length()
+	if _holding_jump and not long_jump and _jumps == 1 and _jump_hold > 0.13 and hs > 4.0 and has_input:
+		long_jump = true
+		var ld: Vector3 = wish.normalized()
+		velocity.x = ld.x * LONG_JUMP_SPEED
+		velocity.z = ld.z * LONG_JUMP_SPEED
+		velocity.y = maxf(velocity.y, 6.5)
+		Sfx.play("longjump")
+		CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.1, 0.0), Color(0.6, 0.85, 1.0, 0.8), 2.5, 0.35)
+	# saut / double saut
+	if GameInput.jump_buffer > 0.0 and _land_t <= 0.0:
+		if _coyote > 0.0:
+			GameInput.consume_jump()
+			velocity.y = JUMP_VELOCITY
+			_coyote = 0.0
+			_jumps = 1
+			_holding_jump = true
+			_jump_hold = 0.0
+			Sfx.play("jump")
+		elif not on_floor and _jumps < 2:
+			GameInput.consume_jump()
+			_double_jump(wish, has_input)
+
+
+# ================================================================ saut, tir, téléportation, ultime
+
+func _double_jump(wish: Vector3, has_input: bool) -> void:
+	velocity.y = DOUBLE_JUMP_VELOCITY
+	_jumps = 2
+	_holding_jump = true
+	_jump_hold = JUMP_HOLD_MAX * 0.5
+	_flip_t = FLIP_TIME
+	if has_input:
+		# on peut changer de direction au double saut
+		var sp: float = maxf(Vector2(velocity.x, velocity.z).length(), RUN_SPEED * 0.8)
+		var d: Vector3 = wish.normalized()
+		velocity.x = d.x * sp
+		velocity.z = d.z * sp
+	Sfx.play("jump2")
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.2, 0.0), Color(0.7, 0.9, 1.0, 0.8), 1.8, 0.3)
+
+
+func _weapon_color() -> Color:
+	var el: String = "divin" if is_divine else String(Weapons.get_def(weapon_index)["element"])
+	var e: Dictionary = Sword.ELEMENTS.get(el, Sword.ELEMENTS["eclair"])
+	return e["core"]
+
+
+## Attaque à distance : vague d'énergie de la couleur de l'arme, visée automatique.
+func _shoot() -> void:
+	_end_attack()
+	_shot_cd = SHOT_COOLDOWN * (0.7 if is_divine else 1.0)
+	var target: Node3D = _nearest_enemy(22.0)
+	var dir: Vector3 = Vector3(-sin(face_yaw), 0.0, -cos(face_yaw))
+	if target != null:
+		var d: Vector3 = target.global_position + Vector3(0.0, 0.9, 0.0) - (global_position + Vector3(0.0, 1.1, 0.0))
+		dir = d.normalized()
+		face_yaw = atan2(-d.x, -d.z)
+	var shot: Node3D = PlayerShot.new()
+	shot.set("dir", dir)
+	shot.set("damage", 14.0 * _dmg_mult())
+	shot.set("color", _weapon_color())
+	shot.set("shooter", self)
+	get_parent().add_child(shot)
+	shot.global_position = global_position + Vector3(0.0, 1.1, 0.0) + dir * 0.8
+	_pose_kind = 1
+	_pose_dur = 0.32
+	_pose_t = _pose_dur
+	Sfx.play("shoot")
+
+
+## Appelé par la vague d'énergie quand elle touche.
+func on_ranged_hit() -> void:
+	Sfx.play("hit", 1.2)
+	combo_count += 1
+	_combo_timer = 2.2
+	combo_changed.emit(combo_count)
+	energy = minf(energy + 3.0, max_energy)
+	energy_changed.emit(energy, max_energy)
+	add_ulti(3.0)
+
+
+## Téléportation : derrière l'ennemi le plus proche + coup puissant, enchaînable
+## 3 fois de suite (vers un autre ennemi si possible). Sans cible : bond de 7 m.
+func _teleport(facing: Vector3) -> void:
+	var chaining: bool = _tp_window > 0.0 and _tp_chain < TP_CHAIN
+	if not chaining and _tp_cd > 0.0:
+		announce.emit("Téléportation dans %d s" % int(ceil(_tp_cd)))
+		return
+	_end_attack()
+	var col: Color = _weapon_color()
+	CombatFx.afterimage(get_parent(), global_position, col)
+	CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.0, 0.0), col, 1.2)
+	var target: Node3D = null
+	var best: float = TP_RANGE
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var en: Node3D = e as Node3D
+		if en == null or String(en.get("state")) == "dead":
+			continue
+		var dd: float = en.global_position.distance_to(global_position)
+		if en == _tp_last and _tp_chain > 0:
+			dd += 6.0          # préfère un autre ennemi pendant un enchaînement
+		if dd < best:
+			best = dd
+			target = en
+	if target != null:
+		var tp: Vector3 = target.global_position
+		var away: Vector3 = tp - global_position
+		away.y = 0.0
+		away = away.normalized() if away.length() > 0.1 else -facing
+		var dest: Vector3 = tp + away * 1.3
+		dest.y = maxf(tp.y, _ground_at(dest) + 0.05)
+		global_position = dest
+		velocity = Vector3.ZERO
+		var look: Vector3 = tp - dest
+		face_yaw = atan2(-look.x, -look.z)
+		rig.rotation.y = face_yaw
+		target.call("take_damage", 28.0 * _dmg_mult(), dest)
+		CombatFx.bolt(get_parent(), dest + Vector3(0.0, 14.0, 0.0), dest + Vector3(0.0, 0.2, 0.0), col, 0.22)
+		CombatFx.spark(get_parent(), tp + Vector3(0.0, 1.0, 0.0), col, 1.4)
+		_tp_last = target
+		_tp_chain += 1
+		_tp_window = 1.3
+		if _tp_chain >= TP_CHAIN:
+			_tp_window = 0.01
+		combo_count += 1
+		_combo_timer = 2.2
+		combo_changed.emit(combo_count)
+		energy = minf(energy + 6.0, max_energy)
+		energy_changed.emit(energy, max_energy)
+		add_ulti(6.0)
+		# enchaîne sur le 3e coup du combo
+		_combo_next = 2
+		_combo_reset = 1.0
+		_pose_kind = 2
+		_pose_dur = 0.3
+		_pose_t = _pose_dur
+		if cam != null:
+			cam.call("shake", 0.3)
+		Sfx.play("teleport")
+		Sfx.play("hit", 0.9)
+	else:
+		# bond vers l'avant, arrêté avant les obstacles
+		var from: Vector3 = global_position + Vector3(0.0, 1.0, 0.0)
+		var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + facing * 7.0, 1)
+		var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+		var dist: float = 7.0
+		if not hit.is_empty():
+			dist = maxf(from.distance_to(hit["position"]) - 0.7, 0.0)
+		var dest2: Vector3 = global_position + facing * dist
+		dest2.y = maxf(global_position.y, _ground_at(dest2) + 0.05)
+		global_position = dest2
+		_tp_cd = 1.2
+		Sfx.play("teleport", 1.15)
+	CombatFx.afterimage(get_parent(), global_position, col)
+
+
+func _ground_at(p: Vector3) -> float:
+	if world != null:
+		return float(world.call("ground_height", p.x, p.z))
+	return p.y
+
+
+func add_ulti(v: float) -> void:
+	if ulti_t >= 0.0:
+		return
+	var was_full: bool = ulti >= ULTI_MAX
+	ulti = minf(ulti + v, ULTI_MAX)
+	ulti_changed.emit(ulti)
+	if not was_full and ulti >= ULTI_MAX:
+		announce.emit("ATTAQUE FINALE PRÊTE !")
+		Sfx.play("levelup", 1.3)
+
+
+## Attaque finale : le héros s'élève, puis 4 vagues d'éclairs frappent tous les ennemis
+## à moins de 16 m, et une onde de choc termine l'attaque.
+func _start_ulti() -> void:
+	_end_attack()
+	_stop_fly()
+	ulti = 0.0
+	ulti_changed.emit(ulti)
+	ulti_t = 0.0
+	_ulti_strikes = 0
+	_ulti_y = global_position.y
+	invulnerable = true
+	velocity = Vector3.ZERO
+	announce.emit("JUGEMENT DE LA FOUDRE !")
+	Sfx.play("ulti_charge")
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.15, 0.0), Color(1.0, 0.85, 0.4, 0.9), 6.0, 0.6)
+
+
+func _process_ulti(delta: float) -> void:
+	ulti_t += delta
+	invulnerable = true
+	state = "attack"
+	# monte de 2,5 m puis reste suspendu
+	var want: float = _ulti_y + 2.5 * smoothstep(0.0, 0.4, ulti_t) * (1.0 - smoothstep(1.45, ULTI_TIME, ulti_t))
+	global_position.y = lerpf(global_position.y, want, 1.0 - exp(-10.0 * delta))
+	velocity = Vector3.ZERO
+	var times: Array = [0.45, 0.75, 1.05, 1.35]
+	if _ulti_strikes < times.size() and ulti_t >= float(times[_ulti_strikes]):
+		_ulti_strikes += 1
+		var col: Color = Color(1.0, 0.9, 0.5) if is_divine else Color(0.6, 0.85, 1.0)
+		var n: int = 0
+		for e in get_tree().get_nodes_in_group("enemies"):
+			var en: Node3D = e as Node3D
+			if en == null or String(en.get("state")) == "dead":
+				continue
+			if en.global_position.distance_to(global_position) > 16.0:
+				continue
+			var p: Vector3 = en.global_position
+			CombatFx.bolt(get_parent(), p + Vector3(randf_range(-2.0, 2.0), 22.0, randf_range(-2.0, 2.0)), p + Vector3(0.0, 0.3, 0.0), col, 0.35)
+			CombatFx.spark(get_parent(), p + Vector3(0.0, 1.0, 0.0), col, 1.6)
+			en.call("take_damage", 45.0 * _dmg_mult(), global_position)
+			n += 1
+			if n >= 10:
+				break
+		if n == 0:
+			# aucun ennemi : éclairs décoratifs autour du héros
+			for k in range(3):
+				var a: float = randf() * TAU
+				var gp: Vector3 = global_position + Vector3(cos(a) * 6.0, 0.0, sin(a) * 6.0)
+				gp.y = _ground_at(gp)
+				CombatFx.bolt(get_parent(), gp + Vector3(0.0, 22.0, 0.0), gp, col, 0.35)
+		Sfx.play("thunder", 1.3)
+		if cam != null:
+			cam.call("shake", 0.5)
+		if world != null and world.has_method("flash"):
+			world.call("flash", 0.6)
+		if _ulti_strikes == times.size():
+			CombatFx.ring(get_parent(), Vector3(global_position.x, _ulti_y + 0.2, global_position.z), col, 14.0, 0.5)
+			Sfx.play("ulti_boom")
+	if ulti_t >= ULTI_TIME:
+		ulti_t = -1.0
+		invulnerable = false

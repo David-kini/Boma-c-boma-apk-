@@ -9,6 +9,8 @@ uniform bool use_pano = false;
 uniform vec3 top_color : source_color = vec3(0.16, 0.36, 0.78);
 uniform vec3 horizon_color : source_color = vec3(0.68, 0.80, 0.94);
 uniform float cloud_cover = 0.48;
+uniform float cloud_dark = 0.0;     // nuages gris (pluie, orage)
+uniform float flash = 0.0;          // éclair
 
 void sky() {
 	vec3 d = EYEDIR;
@@ -21,9 +23,9 @@ void sky() {
 		if (d.y < 0.0) {
 			col = mix(horizon_color, horizon_color * 0.8, clamp(-d.y * 4.0, 0.0, 1.0));
 		}
-		// soleil
+		// soleil (caché par les nuages sombres)
 		float sd = dot(d, LIGHT0_DIRECTION);
-		col += vec3(1.0, 0.92, 0.75) * (pow(max(sd, 0.0), 600.0) * 4.0 + pow(max(sd, 0.0), 12.0) * 0.35);
+		col += vec3(1.0, 0.92, 0.75) * (pow(max(sd, 0.0), 600.0) * 4.0 + pow(max(sd, 0.0), 12.0) * 0.35) * (1.0 - cloud_dark * 0.9);
 		// nuages projetés sur un plan haut
 		if (d.y > 0.0) {
 			vec2 p = d.xz / (d.y + 0.12) * 0.22;
@@ -33,10 +35,11 @@ void sky() {
 			float c = smoothstep(cloud_cover, cloud_cover + 0.22, n);
 			float shade = smoothstep(cloud_cover, cloud_cover + 0.45, n2 * 0.5 + n1 * 0.5);
 			vec3 cloud = mix(vec3(1.0, 1.0, 1.02), vec3(0.62, 0.68, 0.78), shade * 0.7);
-			cloud += vec3(1.0, 0.9, 0.7) * pow(max(sd, 0.0), 6.0) * 0.4;
+			cloud += vec3(1.0, 0.9, 0.7) * pow(max(sd, 0.0), 6.0) * 0.4 * (1.0 - cloud_dark);
+			cloud = mix(cloud, vec3(0.36, 0.38, 0.43) * (0.8 + 0.4 * (1.0 - shade)), cloud_dark);
 			float fade = smoothstep(0.0, 0.18, d.y);
 			col = mix(col, cloud, c * fade * 0.95);
 		}
-		COLOR = col;
+		COLOR = col + vec3(0.75, 0.8, 1.0) * flash * 0.8;
 	}
 }

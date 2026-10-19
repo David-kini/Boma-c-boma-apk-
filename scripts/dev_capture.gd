@@ -104,6 +104,13 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		player.set("level", int(args["level"]))
 	if args.has("weapon"):
 		player.call("_equip_weapon", int(args["weapon"]), false)
+	if args.has("weather"):
+		var wt: Node = player.get("world").get("weather")
+		wt.set("forced", true)
+		wt.call("set_weather", String(args["weather"]), true)
+	if args.has("ulti"):
+		player.set("ulti", 100.0)
+		GameInput.ulti_buffer = 1.0
 	if args.has("coat"):
 		player.call("set_coat", String(args["coat"]))
 	if args.has("wings"):
@@ -115,11 +122,15 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		GameInput.divine_buffer = 1.0
 	if args.has("menu"):
 		_open_menu_at = 25
+	shoot_at = int(args.get("shoot", "-1"))
+	tp_at = int(args.get("tp", "-1"))
 	autoattack = args.has("autoattack")
 	report = args.has("report")
 
 
 var autoattack: bool = false
+var shoot_at: int = -1
+var tp_at: int = -1
 var _open_menu_at: int = -1
 var report: bool = false
 var _log_t: float = 0.0
@@ -148,6 +159,10 @@ func _process(delta: float) -> void:
 			_log_t = 1.0
 			_report()
 	_n += 1
+	if _n == shoot_at:
+		GameInput.shoot_buffer = 0.2
+	if _n == tp_at:
+		GameInput.tp_buffer = 0.2
 	if _n == _open_menu_at:
 		get_parent().get("hud").call("open_settings")
 	if _n == frames:

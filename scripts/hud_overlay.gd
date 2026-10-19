@@ -30,6 +30,9 @@ func _buttons() -> Dictionary:
 		"divine": [Vector2(s.x - 400.0, s.y - 72.0), 40.0, "DIVIN"],
 		"weapon": [Vector2(s.x - 58.0, 125.0), 30.0, "ARME"],
 		"heal": [Vector2(s.x - 58.0, 195.0), 30.0, "SOIN"],
+		"shoot": [Vector2(s.x - 210.0, s.y - 305.0), 38.0, "TIR"],
+		"tp": [Vector2(s.x - 390.0, s.y - 195.0), 38.0, "TP"],
+		"ulti": [Vector2(s.x - 335.0, s.y - 320.0), 40.0, "ULTI"],
 		"menu": [Vector2(s.x - 58.0, 50.0), 34.0, "MENU"],
 	}
 
@@ -46,6 +49,7 @@ func _reset() -> void:
 	btn_touch.clear()
 	pressed.clear()
 	GameInput.touch_move = Vector2.ZERO
+	GameInput.touch_jump_held = false
 
 
 func _input(event: InputEvent) -> void:
@@ -96,6 +100,12 @@ func _press(bname: String) -> void:
 		GameInput.weapon_buffer = GameInput.BUFFER_TIME
 	elif bname == "heal":
 		GameInput.heal_buffer = GameInput.BUFFER_TIME
+	elif bname == "shoot":
+		GameInput.shoot_buffer = GameInput.BUFFER_TIME
+	elif bname == "tp":
+		GameInput.tp_buffer = GameInput.BUFFER_TIME
+	elif bname == "ulti":
+		GameInput.ulti_buffer = GameInput.BUFFER_TIME
 	elif bname == "menu":
 		_reset()
 		get_parent().call("open_settings")
@@ -122,6 +132,7 @@ func _touch_drag(idx: int, pos: Vector2, rel: Vector2) -> void:
 
 
 func _process(_delta: float) -> void:
+	GameInput.touch_jump_held = bool(pressed.get("jump", false))
 	if enabled:
 		queue_redraw()
 
@@ -141,7 +152,7 @@ func _draw() -> void:
 		var center: Vector2 = def[0]
 		var rad: float = float(def[1])
 		var on: bool = bool(pressed.get(bname, false))
-		if bname == "divine" and _divine_ready():
+		if (bname == "divine" and _divine_ready()) or (bname == "ulti" and _ulti_ready()):
 			on = fmod(Time.get_ticks_msec() * 0.004, 2.0) < 1.0
 		draw_circle(center, rad, Color(1.0, 0.85, 0.3, 0.45 if on else 0.18))
 		draw_arc(center, rad, 0.0, TAU, 32, Color(1.0, 0.85, 0.3, 0.8), 2.0)
@@ -155,3 +166,10 @@ func _divine_ready() -> bool:
 		return false
 	var p: Node = ps[0]
 	return float(p.get("energy")) >= float(p.get("max_energy")) and not bool(p.get("is_divine"))
+
+
+func _ulti_ready() -> bool:
+	var ps: Array = get_tree().get_nodes_in_group("player")
+	if ps.is_empty():
+		return false
+	return float(ps[0].get("ulti")) >= 100.0

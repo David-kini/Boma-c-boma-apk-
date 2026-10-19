@@ -21,6 +21,7 @@ var hp_text: Label
 var combo_label: Label
 var ko_label: Label
 var xp_fill: ColorRect
+var ulti_fill: ColorRect
 var lvl_label: Label
 var power_label: Label
 var wings_button: Button
@@ -47,6 +48,8 @@ func setup(p: Node3D, w: Node3D) -> void:
 	p.connect("level_changed", _on_level)
 	p.connect("announce", show_banner)
 	p.connect("inventory_changed", _on_inventory)
+	p.connect("ulti_changed", _on_ulti)
+	_on_ulti(float(p.get("ulti")))
 	_on_inventory(int(p.get("gold")), int(p.get("potions")))
 	_on_level(int(p.get("level")), int(p.get("xp")), int(p.call("xp_needed")))
 	_on_hp(float(p.get("hp")), float(p.get("max_hp")))
@@ -84,6 +87,11 @@ func _on_level(lv: int, xp: int, need: int) -> void:
 	xp_fill.size.x = 196.0 * clampf(float(xp) / float(need), 0.0, 1.0)
 
 
+func _on_ulti(v: float) -> void:
+	ulti_fill.size.x = 196.0 * clampf(v / 100.0, 0.0, 1.0)
+	ulti_fill.color = Color(1.0, 0.85, 0.3) if v >= 100.0 else Color(0.75, 0.4, 1.0)
+
+
 func _on_inventory(gold: int, potions: int) -> void:
 	inv_label.text = "Or : %d    Potions : %d" % [gold, potions]
 
@@ -103,15 +111,16 @@ func _on_combo(count: int) -> void:
 func _ready() -> void:
 	layer = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	zone_label = _make_label(Vector2(20.0, 80.0), 22)
-	info_label = _make_label(Vector2(20.0, 110.0), 14)
+	zone_label = _make_label(Vector2(20.0, 86.0), 22)
+	info_label = _make_label(Vector2(20.0, 116.0), 14)
 	# barres de vie (vert/rouge) et d'énergie (or)
 	hp_fill = _bar(Vector2(20.0, 14.0), Vector2(260.0, 22.0), Color(0.25, 0.85, 0.35))
 	hp_text = _make_label(Vector2(26.0, 14.0), 15)
 	en_fill = _bar(Vector2(20.0, 42.0), Vector2(200.0, 14.0), Color(1.0, 0.78, 0.2))
 	xp_fill = _bar(Vector2(20.0, 60.0), Vector2(200.0, 8.0), Color(0.45, 0.85, 1.0))
+	ulti_fill = _bar(Vector2(20.0, 72.0), Vector2(200.0, 8.0), Color(0.75, 0.4, 1.0))
 	lvl_label = _make_label(Vector2(228.0, 40.0), 18)
-	inv_label = _make_label(Vector2(20.0, 134.0), 16)
+	inv_label = _make_label(Vector2(20.0, 140.0), 16)
 	inv_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	power_label = _make_label(Vector2(290.0, 14.0), 18)
 	power_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
@@ -132,7 +141,7 @@ func _ready() -> void:
 	ko_label.visible = false
 	help_label = _make_label(Vector2(20.0, 505.0), 14)
 	help_label.visible = not DisplayServer.is_touchscreen_available()
-	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J/clic : attaquer (5 coups) · F voler · T Transformation · R arme · H potion · Échap : menu"
+	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J/clic : attaquer (5 coups) · F voler · T Transformation · G tir · V téléport · U attaque finale · R arme · H potion · Échap : menu"
 	_build_boss_bar()
 	zone_banner = Label.new()
 	zone_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -466,7 +475,9 @@ func _process(delta: float) -> void:
 		if bool(player.get("is_divine")):
 			txt += "DIVIN %d s" % int(ceil(float(player.get("divine_left"))))
 		elif float(player.get("energy")) >= float(player.get("max_energy")):
-			txt += "Énergie pleine : DIVIN prêt !"
+			txt += "Énergie pleine : DIVIN prêt !   "
+		if float(player.get("ulti")) >= 100.0:
+			txt += "ULTI prêt !"
 		power_label.text = txt
 		_update_boss_bar()
 	_tick -= delta
@@ -480,8 +491,12 @@ func _process(delta: float) -> void:
 		_last_zone = zname
 		zone_banner.text = zname
 		_banner_t = 3.0
-	info_label.text = "%d FPS · Qualité : %s · x %d  y %d  z %d" % [
-		Engine.get_frames_per_second(), GameSettings.quality_name(),
+	var meteo: String = ""
+	var wt: Node = world.get("weather")
+	if wt != null:
+		meteo = " · " + String(wt.call("weather_name"))
+	info_label.text = "%d FPS · Qualité : %s%s · x %d  y %d  z %d" % [
+		Engine.get_frames_per_second(), GameSettings.quality_name(), meteo,
 		int(p.x), int(p.y), int(p.z)]
 
 

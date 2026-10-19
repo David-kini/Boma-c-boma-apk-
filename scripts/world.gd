@@ -6,12 +6,15 @@ const WorldData = preload("res://scripts/world_data.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const Landmarks = preload("res://scripts/landmarks.gd")
 const EnemySpawner = preload("res://scripts/enemy_spawner.gd")
+const Weather = preload("res://scripts/weather.gd")
 
 var data: RefCounted
 var terrain: Node3D
 var sun: DirectionalLight3D
 var env: Environment
 var follow: Node3D = null
+var sky_mat: ShaderMaterial
+var weather: Node3D
 
 
 func _ready() -> void:
@@ -31,6 +34,16 @@ func _ready() -> void:
 	terrain.call("build_around_now", spawn_point(), 1)
 	GameSettings.quality_changed.connect(_apply_quality)
 	_apply_quality(GameSettings.quality)
+	weather = Weather.new()
+	weather.name = "Meteo"
+	add_child(weather)
+	weather.call("setup", env, sun, sky_mat)
+
+
+## Flash d'éclair (attaque finale, orage).
+func flash(strength: float) -> void:
+	if weather != null:
+		weather.call("flash", strength)
 
 
 func _process(delta: float) -> void:
@@ -87,6 +100,7 @@ func _build_environment() -> void:
 		psm.set_shader_parameter("pano_tex", load(PANO))
 		psm.set_shader_parameter("use_pano", true)
 	sky.sky_material = psm
+	sky_mat = psm
 	env.sky = sky
 	# lumière ambiante de couleur fixe (celle calculée depuis le ciel fait des taches
 	# sur les visages avec le rendu mobile)
@@ -119,11 +133,13 @@ func _build_environment() -> void:
 	# lumière d'appoint chaude, opposée au soleil, sans ombre (visages jamais tout bleus)
 	var fill: DirectionalLight3D = DirectionalLight3D.new()
 	fill.name = "LumiereAppoint"
-	fill.rotation_degrees = Vector3(-25.0, 150.0, 0.0)
+	fill.rotation_degrees = Vector3(-62.0, 150.0, 0.0)
 	fill.light_energy = 0.30
 	fill.light_color = Color(1.0, 0.85, 0.72)
 	fill.shadow_enabled = false
-	fill.light_specular = 0.2
+	fill.light_specular = 0.0
+	# n'éclaire que les personnages (couche 2) : sinon reflet blanc sur le sol brillant de l'arène
+	fill.light_cull_mask = 2
 	add_child(fill)
 
 

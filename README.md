@@ -11,6 +11,19 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Sauts, pouvoirs de combat, météo, sons (v0.11)
+- Saut : appui court = saut normal ; maintenir = saut plus haut (2,6 m) ; maintenir en
+  courant = SAUT LONG (11 m, contre 6 m sans) ; appuyer en l'air = DOUBLE SAUT avec salto.
+- TIR (touche G) : vague d'énergie de la couleur de l'arme, visée auto, traverse 3 ennemis.
+- TP (touche V) : téléportation derrière l'ennemi + coup puissant, enchaînable 3 fois
+  (téléportation, téléportation, téléportation), puis le combo continue. Sans cible : bond de 7 m.
+- ULTI (touche U) : attaque finale « Jugement de la foudre » quand la jauge violette est
+  pleine (elle se remplit en frappant) : le héros s'élève, 4 vagues d'éclairs, onde de choc.
+- Météo changeante toutes les 1 à 2 min : ensoleillé, nuageux, pluie, orage (éclairs et
+  tonnerre), brouillard ; transitions douces ; pluie légère adaptée au téléphone.
+- Nouveaux sons : double saut, saut long, tir, téléportation, tonnerre, charge et explosion
+  de l'ultime, pluie en boucle ; impact d'épée plus percutant.
+
 ## Grande Arène et textures photo (v0.10)
 - Nouvelle arène inspirée du concept art : sol de dalles sombres polies (effet mouillé)
   avec incrustations d'or (cercles, rayons, runes, étoile), 8 tours gothiques à flèches
