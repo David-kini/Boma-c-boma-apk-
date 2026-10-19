@@ -20,3 +20,8 @@ Le héros (corps, visage, manteau, épée) est entièrement créé par code dans
 
 Formats : glTF 2.0 (`.gltf` + `.bin`, ou `.glb`), importés nativement par Godot 4.
 Poids : 18 à 860 triangles par élément de décor, environ 6 000 par personnage animé.
+
+## Textures photo (v0.10) — CC0
+- Assets/Textures/Photo/herbe_ground037.jpg — ambientCG Ground037 (CC0)
+- Assets/Textures/Photo/roche_rock023.jpg — ambientCG Rock023 (CC0)
+Détails : Assets/Textures/Photo/LICENCES.txt. Textures des modèles KayKit réduites à 256 px.

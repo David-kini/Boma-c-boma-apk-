@@ -1,0 +1,6 @@
+Textures photographiques — licence CC0 1.0 (domaine public), ambientCG.com
+- herbe_ground037.jpg : https://ambientcg.com/view?id=Ground037
+- roche_rock023.jpg   : https://ambientcg.com/view?id=Rock023
+Obtenues via le dépôt TokisanGames/Terrain3D (project/demo/assets/textures,
+fichier asset_licenses.txt : « All ambientCG assets are provided under CC0 1.0 »).
+Redimensionnées en 512 px pour les téléphones.

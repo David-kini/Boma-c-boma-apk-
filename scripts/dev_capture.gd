@@ -153,5 +153,7 @@ func _process(delta: float) -> void:
 	if _n == frames:
 		var img: Image = get_viewport().get_texture().get_image()
 		img.save_png(path)
-		print("CAPTURE OK ", path, " ", img.get_size())
+		print("CAPTURE OK ", path, " ", img.get_size(), " appels=", RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+			" triangles=", RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
+			" vram=", RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED) / 1048576)
 		get_tree().quit()

@@ -12,7 +12,7 @@ const BUILD_INTERVAL: float = 0.10        # une tuile construite toutes les 0,1 
 
 var data: RefCounted
 var decor: RefCounted
-var material: StandardMaterial3D
+var material: ShaderMaterial
 var chunks: Dictionary = {}               # Vector2i -> {node, lod}
 var view_chunks: int = 5
 var max_index: int = 12
@@ -23,16 +23,11 @@ var _gen: int = 0                         # incrémenté à chaque changement de
 func setup(world_data: RefCounted) -> void:
 	data = world_data
 	decor = ChunkDecor.new(world_data)
-	material = StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 1.0
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	# texture de détail (herbe/terre, générée et libre de droits) projetée en coordonnées
-	# monde, multipliée par les couleurs de zone du terrain
-	material.albedo_texture = load("res://Assets/Textures/sol_detail.png") as Texture2D
-	material.uv1_triplanar = true
-	material.uv1_world_triplanar = true
-	material.uv1_scale = Vector3(0.18, 0.18, 0.18)
+	# couleurs de zone + vraies textures photo CC0 (herbe et roche, ambientCG)
+	material = ShaderMaterial.new()
+	material.shader = load("res://shaders/terrain.gdshader") as Shader
+	material.set_shader_parameter("tex_grass", load("res://Assets/Textures/Photo/herbe_ground037.jpg"))
+	material.set_shader_parameter("tex_rock", load("res://Assets/Textures/Photo/roche_rock023.jpg"))
 	max_index = int(ceil(WorldData.HALF / CHUNK))
 	view_chunks = GameSettings.view_chunks()
 	GameSettings.quality_changed.connect(_on_quality_changed)

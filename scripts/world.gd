@@ -39,7 +39,7 @@ func _process(delta: float) -> void:
 
 
 func spawn_point() -> Vector3:
-	return Vector3(0.0, ground_height(0.0, 70.0) + 1.5, 70.0)
+	return Vector3(0.0, ground_height(0.0, 30.0) + 1.5, 30.0)
 
 
 func ground_height(x: float, z: float) -> float:
@@ -67,11 +67,25 @@ func _build_environment() -> void:
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky: Sky = Sky.new()
-	var psm: ProceduralSkyMaterial = ProceduralSkyMaterial.new()
-	psm.sky_top_color = Color(0.20, 0.38, 0.80)
-	psm.sky_horizon_color = Color(0.66, 0.78, 0.92)
-	psm.ground_horizon_color = Color(0.66, 0.78, 0.92)
-	psm.ground_bottom_color = Color(0.25, 0.30, 0.38)
+	# ciel avec nuages (shader) ; image panoramique réelle si elle est présente
+	var psm: ShaderMaterial = ShaderMaterial.new()
+	psm.shader = load("res://shaders/sky_clouds.gdshader") as Shader
+	var nt: NoiseTexture2D = NoiseTexture2D.new()
+	nt.width = 512
+	nt.height = 512
+	nt.seamless = true
+	nt.generate_mipmaps = true
+	var fn: FastNoiseLite = FastNoiseLite.new()
+	fn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	fn.frequency = 0.008
+	fn.fractal_octaves = 5
+	fn.fractal_gain = 0.55
+	nt.noise = fn
+	psm.set_shader_parameter("noise_tex", nt)
+	const PANO: String = "res://Assets/Textures/Photo/ciel.jpg"
+	if ResourceLoader.exists(PANO):
+		psm.set_shader_parameter("pano_tex", load(PANO))
+		psm.set_shader_parameter("use_pano", true)
 	sky.sky_material = psm
 	env.sky = sky
 	# lumière ambiante de couleur fixe (celle calculée depuis le ciel fait des taches

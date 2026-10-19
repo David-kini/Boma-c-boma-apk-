@@ -234,6 +234,17 @@ func _build_title() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 16)
 	vb.add_child(sub)
+	var crash: String = String(Diagnostic.previous_crash)
+	if crash != "":
+		# rapport de la partie précédente interrompue (à envoyer en capture d'écran)
+		var rep: Label = Label.new()
+		rep.text = "La dernière partie s'est fermée d'un coup. Rapport :\n" + crash
+		rep.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rep.custom_minimum_size = Vector2(660.0, 0.0)
+		rep.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rep.add_theme_font_size_override("font_size", 14)
+		rep.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
+		vb.add_child(rep)
 
 
 func show_title() -> void:

@@ -15,6 +15,7 @@ config/icon="res://Assets/Textures/face_photo_reference.png"
 GameSettings="*res://scripts/game_settings.gd"
 GameInput="*res://scripts/game_input.gd"
 Sfx="*res://scripts/sfx.gd"
+Diagnostic="*res://scripts/diagnostic.gd"
 
 [display]
 
@@ -45,3 +46,7 @@ lights_and_shadows/directional_shadow/size.mobile=1024
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality.mobile=1
 environment/defaults/default_clear_color=Color(0.6, 0.75, 0.9, 1)
+
+[debug]
+
+file_logging/enable_file_logging=true

@@ -13,6 +13,8 @@ const HAL: String = "res://Assets/Environment/Halloween/"
 const DUN: String = "res://Assets/Environment/Dungeon/"
 const NPC = preload("res://scripts/npc.gd")
 const CHR: String = "res://Assets/Characters/"
+const ROCK_PHOTO: String = "res://Assets/Textures/Photo/roche_rock023.jpg"
+const Floater = preload("res://scripts/floater.gd")
 const VIS_RANGE: float = 420.0
 
 var data: RefCounted
@@ -38,15 +40,26 @@ func build(parent: Node3D, world_data: RefCounted) -> void:
 	_lake()
 	_village()
 	_models_extra()
-	_clouds()
+	# nuages : dessinés par le ciel (shaders/sky_clouds.gdshader)
 	_npcs()
 
 
 # ------------------------------------------------------------ outils
 
-func _mat(key: String) -> StandardMaterial3D:
+func _mat(key: String) -> Material:
 	if mats.has(key):
-		return mats[key] as StandardMaterial3D
+		return mats[key] as Material
+	if key == "arena_floor":
+		var sm: ShaderMaterial = ShaderMaterial.new()
+		sm.shader = load("res://shaders/arena_floor.gdshader") as Shader
+		sm.set_shader_parameter("tex_rock", load(ROCK_PHOTO))
+		mats[key] = sm
+		return sm
+	if key == "waterfall":
+		var wm: ShaderMaterial = ShaderMaterial.new()
+		wm.shader = load("res://shaders/waterfall.gdshader") as Shader
+		mats[key] = wm
+		return wm
 	var m: StandardMaterial3D = StandardMaterial3D.new()
 	m.roughness = 0.9
 	var unshaded: bool = false
@@ -91,6 +104,47 @@ func _mat(key: String) -> StandardMaterial3D:
 			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			m.roughness = 0.1
 			m.metallic = 0.3
+		"castle":
+			# pierre de château : vraie texture photo CC0 (Rock023), teinte claire bleutée
+			m.albedo_color = Color(0.70, 0.71, 0.76)
+			m.albedo_texture = load(ROCK_PHOTO) as Texture2D
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = true
+			m.uv1_scale = Vector3(0.16, 0.16, 0.16)
+		"castle_dark":
+			m.albedo_color = Color(0.40, 0.40, 0.46)
+			m.albedo_texture = load(ROCK_PHOTO) as Texture2D
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = true
+			m.uv1_scale = Vector3(0.2, 0.2, 0.2)
+		"statue":
+			m.albedo_color = Color(0.30, 0.31, 0.35)
+			m.albedo_texture = load(ROCK_PHOTO) as Texture2D
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = true
+			m.uv1_scale = Vector3(0.5, 0.5, 0.5)
+			m.roughness = 0.6
+		"crystal_blue":
+			m.albedo_color = Color(0.35, 0.75, 1.0)
+			unshaded = true
+		"glow_blue":
+			m.albedo_color = Color(0.25, 0.55, 1.0, 0.35)
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			unshaded = true
+		"island_rock":
+			m.albedo_color = Color(0.42, 0.36, 0.31)
+			m.albedo_texture = load(ROCK_PHOTO) as Texture2D
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = false
+			m.uv1_scale = Vector3(0.06, 0.06, 0.06)
+		"island_grass":
+			m.albedo_color = Color(0.55, 0.72, 0.40)
+			m.albedo_texture = load("res://Assets/Textures/Photo/herbe_ground037.jpg") as Texture2D
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = false
+			m.uv1_scale = Vector3(0.12, 0.12, 0.12)
 		"floor_tiles":
 			m.albedo_color = Color(0.70, 0.68, 0.64)
 			m.albedo_texture = load("res://Assets/Textures/dalles_pierre.png") as Texture2D
@@ -98,8 +152,8 @@ func _mat(key: String) -> StandardMaterial3D:
 			m.uv1_world_triplanar = true
 			m.uv1_scale = Vector3(0.22, 0.22, 0.22)
 	if key == "stone_light" or key == "stone_dark" or key == "stone_ruin":
-		# pierre texturée (texture générée, libre de droits), projetée en coordonnées monde
-		m.albedo_texture = load("res://Assets/Textures/pierre_brute.png") as Texture2D
+		# pierre : vraie texture photo CC0 (Rock023), projetée en coordonnées monde
+		m.albedo_texture = load(ROCK_PHOTO) as Texture2D
 		m.uv1_triplanar = true
 		m.uv1_world_triplanar = true
 		m.uv1_scale = Vector3(0.35, 0.35, 0.35)
@@ -234,39 +288,41 @@ func yaw_x(dir: Vector2) -> float:
 
 func _arena() -> void:
 	_begin("Arene")
-	# sol en pierre (dessus à y = 0,1) et anneaux dorés
-	cyl("floor_tiles", 47.0, 47.0, 0.3, Vector3(0.0, -0.05, 0.0), 48, true)
-	ring("gold", 12.0, 0.5, Vector3(0.0, 0.1, 0.0))
-	ring("gold", 30.0, 0.5, Vector3(0.0, 0.1, 0.0))
-	# éclair doré au centre
-	box("gold", Vector3(1.0, 0.06, 5.0), Vector3(-0.9, 0.12, -2.2), 0.45, false)
-	box("gold", Vector3(3.2, 0.06, 0.9), Vector3(0.0, 0.12, 0.0), 0.0, false)
-	box("gold", Vector3(1.0, 0.06, 5.0), Vector3(0.9, 0.12, 2.2), 0.45, false)
-	var step: float = TAU / 16.0
-	# 16 piliers avec base et chapiteau (plus hauts près des portes)
-	for i in range(16):
-		var a: float = step * (float(i) + 0.5)
-		var p: Vector2 = Vector2(cos(a), sin(a)) * 50.0
-		var near_gate: bool = i % 4 == 0 or i % 4 == 3
-		var h: float = 12.0 if near_gate else 9.0
-		box("stone_light", Vector3(3.0, 0.6, 3.0), Vector3(p.x, 0.3, p.y), -a)
-		cyl("stone_light", 1.1, 1.3, h, Vector3(p.x, h * 0.5, p.y), 10, true)
-		box("stone_light", Vector3(3.2, 0.8, 3.2), Vector3(p.x, h + 0.4, p.y), -a, false)
-	# murs et gradins entre les piliers, 4 portes aux points cardinaux
-	for i in range(16):
-		if i % 4 == 0:
-			continue
-		var ac: float = step * float(i)
-		var dir: Vector2 = Vector2(cos(ac), sin(ac))
-		var rot: float = -(ac + PI * 0.5)
-		var wp: Vector2 = dir * 49.04
-		box("stone_dark", Vector3(17.0, 3.0, 1.2), Vector3(wp.x, 1.5, wp.y), rot)
-		for t in range(3):
-			var r: float = 53.0 + 3.5 * float(t)
-			var ht: float = 1.2 * float(t + 1)
-			var tp: Vector2 = dir * r
-			var gy: float = _g(tp.x, tp.y) - 0.3
-			box("stone_dark", Vector3(0.40 * r, ht + 0.3, 3.5), Vector3(tp.x, gy + (ht + 0.3) * 0.5, tp.y), rot)
+	# --- sol : dalles sombres polies + incrustations d'or (shader), dessus à y = 0,1
+	cyl("arena_floor", 47.0, 47.0, 0.3, Vector3(0.0, -0.05, 0.0), 64, true)
+	# marche dorée en bordure du sol
+	cyl("gold", 47.6, 47.9, 0.36, Vector3(0.0, -0.15, 0.0), 64, false)
+	# --- 8 tours gothiques autour, portes aux 4 points cardinaux
+	for i in range(8):
+		var a: float = TAU / 8.0 * (float(i) + 0.5)
+		var tp: Vector2 = Vector2(cos(a), sin(a)) * 54.0
+		_gothic_tower(Vector3(tp.x, minf(_g(tp.x, tp.y), 0.0) - 1.0, tp.y), 22.0 + 6.0 * float(i % 2), -a)
+	# --- arcades entre les tours (3 arches par côté), sauf aux portes
+	for i in range(8):
+		var a0: float = TAU / 8.0 * (float(i) + 0.5)
+		var a1: float = TAU / 8.0 * (float(i) + 1.5)
+		for k in range(4):
+			var am: float = lerpf(a0, a1, (float(k) + 0.5) / 4.0)
+			var mid: bool = k == 1 or k == 2
+			var rr: float = 52.5
+			var cp: Vector2 = Vector2(cos(am), sin(am)) * rr
+			var yaw: float = -(am + PI * 0.5)
+			var is_gate: bool = (i % 2 == 1) and mid
+			if is_gate and k == 1:
+				# grande porte : une seule arche haute centrée sur l'axe cardinal
+				var ag: float = TAU / 8.0 * (float(i) + 1.0)
+				var gp: Vector2 = Vector2(cos(ag), sin(ag)) * rr
+				arch("castle", Vector3(gp.x, 0.0, gp.y), 9.0, 10.0, 3.0, -(ag + PI * 0.5), 2.2)
+				continue
+			if is_gate:
+				continue
+			arch("castle", Vector3(cp.x, 0.0, cp.y), 6.0, 7.0, 2.4, yaw, 1.8)
+	# --- statues encapuchonnées tenant un cristal bleu, face au centre
+	for i in range(8):
+		var a2: float = TAU / 8.0 * (float(i) + 0.5)
+		var sp: Vector2 = Vector2(cos(a2), sin(a2)) * 42.5
+		_hooded_statue(Vector3(sp.x, 0.1, sp.y), a2)
+	# --- panneaux indicateurs devant les portes
 	var signs: Array = [
 		"Zone rocheuse\nForêt fantastique",
 		"Plaine de départ\nLac Miroir · Zone des monstres",
@@ -274,29 +330,171 @@ func _arena() -> void:
 		"Ruines anciennes\nRepaire du boss",
 	]
 	for j in range(4):
-		var a: float = float(j) * PI * 0.5
-		var dir: Vector2 = Vector2(cos(a), sin(a))
-		var rot: float = -(a + PI * 0.5)
-		var gp: Vector2 = dir * 49.04
-		# linteau et bannière de la porte
-		box("stone_light", Vector3(21.0, 1.6, 2.4), Vector3(gp.x, 12.0, gp.y), rot)
-		box("gold", Vector3(3.0, 5.0, 0.15), Vector3(gp.x, 8.7, gp.y), rot, false)
-		box("black", Vector3(0.7, 3.6, 0.2), Vector3(gp.x, 8.9, gp.y), rot, false)
-		# braseros de chaque côté
-		for side in [-1.0, 1.0]:
-			var a2: float = a + float(side) * 0.2
-			var bp: Vector2 = Vector2(cos(a2), sin(a2)) * 54.0
-			var by: float = _g(bp.x, bp.y)
-			cyl("stone_dark", 0.5, 0.6, 1.4, Vector3(bp.x, by + 0.7, bp.y), 8, true)
-			cyl("gold", 0.9, 0.5, 0.5, Vector3(bp.x, by + 1.65, bp.y), 10, false)
-			sphere("fire", 0.55, Vector3(bp.x, by + 2.1, bp.y), 6, 4, Vector3(1.0, 1.5, 1.0))
-		# panneau indicateur
-		var sp: Vector2 = dir * 63.0
-		var sy: float = _g(sp.x, sp.y)
-		cyl("wood", 0.12, 0.12, 3.0, Vector3(sp.x, sy + 1.5, sp.y), 6, true)
-		box("wood", Vector3(2.6, 0.7, 0.12), Vector3(sp.x, sy + 2.8, sp.y), rot, false)
-		sign_label(String(signs[j]), Vector3(sp.x, sy + 3.6, sp.y))
+		var aj: float = float(j) * PI * 0.5
+		var dir: Vector2 = Vector2(cos(aj), sin(aj))
+		var sgp: Vector2 = dir * 63.0
+		var sy: float = _g(sgp.x, sgp.y)
+		cyl("wood", 0.12, 0.12, 3.0, Vector3(sgp.x, sy + 1.5, sgp.y), 6, true)
+		box("wood", Vector3(2.6, 0.7, 0.12), Vector3(sgp.x, sy + 2.8, sgp.y), -(aj + PI * 0.5), false)
+		sign_label(String(signs[j]), Vector3(sgp.x, sy + 3.6, sgp.y))
 	_end()
+	_arena_backdrop()
+
+
+## Arche en pierre : ouverture de largeur w, piliers de hauteur h, profondeur d.
+## pos = centre au sol. yaw : rotation (l'arche s'étend le long de l'axe X local).
+func arch(mat: String, pos: Vector3, w: float, h: float, d: float, yaw: float, pw: float = 1.5) -> void:
+	var b: Basis = Basis(Vector3.UP, yaw)
+	var ax: Vector3 = b * Vector3.RIGHT
+	var base_y: float = pos.y if pos.y > 0.0 else minf(_g(pos.x, pos.z), 0.0) - 1.5
+	var y0: float = pos.y
+	var top: float = y0 + h + w * 0.5 + 1.2
+	for side in [-1.0, 1.0]:
+		var pp: Vector3 = pos + ax * (w * 0.5 + pw * 0.5) * float(side)
+		var ph: float = top - base_y
+		box(mat, Vector3(pw, ph, d), Vector3(pp.x, base_y + ph * 0.5, pp.z), yaw)
+		# chapiteau
+		box(mat, Vector3(pw + 0.4, 0.5, d + 0.3), Vector3(pp.x, y0 + h, pp.z), yaw, false)
+	# voussoirs en demi-cercle
+	var n: int = 9
+	var rad: float = w * 0.5
+	for k in range(n):
+		var t0: float = PI * float(k) / float(n)
+		var t1: float = PI * float(k + 1) / float(n)
+		var tm: float = (t0 + t1) * 0.5
+		var cpos: Vector3 = pos + ax * (cos(tm) * (rad + 0.35)) + Vector3(0.0, h + sin(tm) * (rad + 0.35), 0.0)
+		cpos.y = y0 + h + sin(tm) * (rad + 0.35)
+		var seg_len: float = (rad + 0.7) * (t1 - t0) * 1.08
+		var rot: Basis = Basis(Vector3.FORWARD, tm - PI * 0.5)
+		box(mat, Vector3(seg_len, 0.7, d), cpos, yaw, false, rot)
+	# remplissage au-dessus de l'arche (écoinçons) et corniche
+	for side in [-1.0, 1.0]:
+		var fp: Vector3 = pos + ax * (rad * 0.62) * float(side)
+		box(mat, Vector3(rad * 0.76, rad * 0.5 + 0.5, d * 0.9), Vector3(fp.x, y0 + h + rad * 0.78 + 0.45, fp.z), yaw, false)
+	box(mat, Vector3(w + pw * 2.0 + 0.2, 0.8, d + 0.4), Vector3(pos.x, top, pos.z), yaw, false)
+	# créneaux
+	for c in range(-2, 3):
+		var cp: Vector3 = pos + ax * (float(c) * (w + pw * 2.0) / 5.0)
+		box(mat, Vector3(0.9, 0.9, d * 0.6), Vector3(cp.x, top + 0.85, cp.z), yaw, false)
+
+
+## Tour gothique : base carrée, étage, flèche pointue dorée, 4 tourelles d'angle.
+func _gothic_tower(base: Vector3, h: float, yaw: float) -> void:
+	var b: Basis = Basis(Vector3.UP, yaw)
+	box("castle", Vector3(7.0, 2.0, 7.0), base + Vector3(0.0, 1.0, 0.0), yaw)
+	box("castle", Vector3(6.0, h, 6.0), base + Vector3(0.0, 2.0 + h * 0.5, 0.0), yaw)
+	# bandeaux et fenêtres en ogive (sombres) sur les 4 faces
+	for lvl in range(3):
+		var y: float = base.y + 2.0 + h * (0.3 + 0.25 * float(lvl))
+		box("castle_dark", Vector3(6.4, 0.4, 6.4), Vector3(base.x, y + 2.2, base.z), yaw, false)
+		for f in range(4):
+			var n: Vector3 = b * Basis(Vector3.UP, float(f) * PI * 0.5) * Vector3(0.0, 0.0, 3.02)
+			box("black", Vector3(1.0, 2.6, 0.1), Vector3(base.x + n.x, y, base.z + n.z), yaw + float(f) * PI * 0.5, false)
+			cyl("black", 0.0, 0.55, 0.8, Vector3(base.x + n.x, y + 1.6, base.z + n.z), 4, false,
+				Basis(Vector3.UP, yaw + float(f) * PI * 0.5 + PI * 0.25) * Basis.from_scale(Vector3(1.0, 1.0, 0.15)))
+	var top: float = base.y + 2.0 + h
+	box("castle", Vector3(7.2, 1.0, 7.2), Vector3(base.x, top + 0.5, base.z), yaw, false)
+	box("castle", Vector3(4.6, 5.0, 4.6), Vector3(base.x, top + 3.5, base.z), yaw, false)
+	cyl("castle_dark", 0.0, 3.6, 11.0, Vector3(base.x, top + 11.5, base.z), 4, false, Basis(Vector3.UP, yaw + PI * 0.25))
+	cyl("gold", 0.0, 0.35, 3.0, Vector3(base.x, top + 18.4, base.z), 6, false)
+	sphere("gold", 0.35, Vector3(base.x, top + 17.0, base.z), 6, 4)
+	for cx in [-1.0, 1.0]:
+		for cz in [-1.0, 1.0]:
+			var o: Vector3 = b * Vector3(3.3 * float(cx), 0.0, 3.3 * float(cz))
+			cyl("castle", 0.6, 0.7, 4.0, Vector3(base.x + o.x, top + 3.0, base.z + o.z), 8, false)
+			cyl("castle_dark", 0.0, 0.85, 3.0, Vector3(base.x + o.x, top + 6.5, base.z + o.z), 6, false)
+
+
+## Statue de moine encapuchonné (pierre sombre) qui tient un cristal bleu lumineux.
+func _hooded_statue(pos: Vector3, a: float) -> void:
+	var inward: Vector3 = Vector3(-cos(a), 0.0, -sin(a))
+	var yaw: float = atan2(inward.x, inward.z)
+	box("castle", Vector3(3.0, 1.6, 3.0), pos + Vector3(0.0, 0.8, 0.0), yaw)
+	box("gold", Vector3(3.1, 0.15, 3.1), pos + Vector3(0.0, 1.55, 0.0), yaw, false)
+	var p: Vector3 = pos + Vector3(0.0, 1.6, 0.0)
+	# robe, épaules, capuche
+	cyl("statue", 0.75, 1.25, 4.2, p + Vector3(0.0, 2.1, 0.0), 10, true)
+	sphere("statue", 0.95, p + Vector3(0.0, 4.15, 0.0), 10, 6, Vector3(1.05, 0.55, 0.8))
+	sphere("statue", 0.62, p + Vector3(0.0, 4.75, 0.0) + inward * 0.05, 10, 6, Vector3(1.0, 1.15, 1.05))
+	cyl("statue", 0.0, 0.5, 0.7, p + Vector3(0.0, 5.2, 0.0) - inward * 0.25, 8, false,
+		Basis(inward.cross(Vector3.UP).normalized(), -0.5))
+	# visage dans l'ombre de la capuche
+	sphere("black", 0.4, p + Vector3(0.0, 4.68, 0.0) + inward * 0.32, 8, 5, Vector3(1.0, 1.1, 0.5))
+	# bras repliés devant la poitrine et cristal
+	var front: Vector3 = p + inward * 0.85 + Vector3(0.0, 3.25, 0.0)
+	sphere("statue", 0.5, front, 8, 5, Vector3(1.5, 0.6, 0.8))
+	var cp: Vector3 = front + inward * 0.25 + Vector3(0.0, 0.85, 0.0)
+	sphere("crystal_blue", 0.42, cp, 4, 2, Vector3(0.75, 1.5, 0.75))
+	var halo: MeshInstance3D = MeshInstance3D.new()
+	var q: QuadMesh = QuadMesh.new()
+	q.size = Vector2(2.6, 2.6)
+	halo.mesh = q
+	halo.material_override = _mat("glow_blue")
+	halo.position = cp
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.visibility_range_end = 160.0
+	g_extra.append(halo)
+
+
+## Décor lointain de l'arène : aqueduc à arches et îles flottantes avec cascades.
+func _arena_backdrop() -> void:
+	_begin("Arene_Decor")
+	# aqueduc derrière la porte nord (deux étages d'arches)
+	for k in range(9):
+		var x: float = -64.0 + 16.0 * float(k)
+		var z: float = -118.0
+		arch("castle", Vector3(x, 0.0, z), 10.0, 14.0, 4.0, 0.0, 3.0)
+		arch("castle", Vector3(x, 22.0, z), 10.0, 6.0, 3.4, 0.0, 3.0)
+	_end()
+	var islands: Array = [
+		[Vector2(-150.0, -170.0), 85.0, 26.0], [Vector2(140.0, -210.0), 110.0, 34.0],
+		[Vector2(230.0, -40.0), 70.0, 20.0], [Vector2(-230.0, 20.0), 95.0, 28.0],
+		[Vector2(40.0, -300.0), 130.0, 40.0], [Vector2(-60.0, 230.0), 80.0, 18.0],
+	]
+	for i in range(islands.size()):
+		var d: Array = islands[i]
+		var c: Vector2 = d[0]
+		_floating_island(Vector3(c.x, float(d[1]), c.y), float(d[2]), i)
+
+
+func _floating_island(pos: Vector3, r: float, idx: int) -> void:
+	var node: Node3D = Floater.new()
+	node.name = "IleFlottante_%d" % idx
+	node.position = pos
+	root.add_child(node)
+	var saved: Node3D = root
+	root = node
+	_begin("Ile")
+	# roche (cône renversé irrégulier), dessus herbeux, petite tour et cascade
+	cyl("island_rock", r, r * 0.25, r * 1.1, Vector3(0.0, -r * 0.55, 0.0), 9, false)
+	cyl("island_rock", r * 0.55, r * 0.05, r * 0.9, Vector3(r * 0.25, -r * 1.3, r * 0.1), 7, false)
+	cyl("island_grass", r * 1.02, r, 1.2, Vector3(0.0, 0.5, 0.0), 12, false)
+	var th: float = r * 1.1
+	cyl("castle", r * 0.14, r * 0.17, th, Vector3(-r * 0.2, th * 0.5 + 1.0, -r * 0.15), 8, false)
+	cyl("castle_dark", 0.0, r * 0.22, r * 0.6, Vector3(-r * 0.2, th + 1.0 + r * 0.3, -r * 0.15), 8, false)
+	cyl("gold", 0.0, r * 0.03, r * 0.15, Vector3(-r * 0.2, th + 1.0 + r * 0.66, -r * 0.15), 6, false)
+	cyl("castle", r * 0.09, r * 0.1, th * 0.6, Vector3(r * 0.35, th * 0.3 + 1.0, r * 0.2), 8, false)
+	cyl("castle_dark", 0.0, r * 0.14, r * 0.4, Vector3(r * 0.35, th * 0.6 + 1.0 + r * 0.2, r * 0.2), 8, false)
+	_end()
+	for ch in node.get_children():
+		for mi in ch.get_children():
+			if mi is MeshInstance3D:
+				(mi as MeshInstance3D).visibility_range_end = 1200.0
+				(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# cascade qui tombe du bord
+	var wf: MeshInstance3D = MeshInstance3D.new()
+	var q: QuadMesh = QuadMesh.new()
+	var fall: float = r * 2.6
+	q.size = Vector2(r * 0.22, fall)
+	wf.mesh = q
+	wf.material_override = _mat("waterfall")
+	var ea: float = float(idx) * 1.7
+	wf.position = Vector3(cos(ea) * r * 0.98, 0.9 - fall * 0.5, sin(ea) * r * 0.98)
+	wf.rotation.y = -ea + PI * 0.5
+	wf.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	wf.visibility_range_end = 1200.0
+	node.add_child(wf)
+	root = saved
 
 
 # ------------------------------------------------------------ camp de départ
@@ -651,19 +849,12 @@ func _models_extra() -> void:
 		var a: float = float(k) / 4.0 * TAU + PI * 0.25
 		var tp: Vector2 = ru + Vector2(cos(a), sin(a)) * 10.0
 		ModelLibrary.place(holder, DUN + "torch_lit.glb", Vector3(tp.x, top + 0.4, tp.y), 0.0, 1.5, "")
-	# --- arène : bannières sur les murs, torches aux portes
-	var step: float = TAU / 16.0
-	for i in range(16):
-		if i % 4 == 0 or i % 2 == 1:
-			continue
-		var ac: float = step * float(i)
-		var bp: Vector2 = Vector2(cos(ac), sin(ac)) * 48.2
-		ModelLibrary.place(holder, DUN + "banner_triple_red.glb", Vector3(bp.x, 0.1, bp.y), -(ac + PI * 0.5) + PI, 1.0, "")
+	# --- arène : torches de part et d'autre des 4 grandes portes
 	for j in range(4):
-		var a: float = float(j) * PI * 0.5
+		var aj: float = float(j) * PI * 0.5
 		for side in [-1.0, 1.0]:
-			var tp: Vector2 = Vector2(cos(a + float(side) * 0.13), sin(a + float(side) * 0.13)) * 46.0
-			ModelLibrary.place(holder, DUN + "torch_lit.glb", Vector3(tp.x, 0.5, tp.y), 0.0, 1.6, "")
+			var tp: Vector2 = Vector2(cos(aj + float(side) * 0.11), sin(aj + float(side) * 0.11)) * 47.0
+			ModelLibrary.place(holder, DUN + "torch_lit.glb", Vector3(tp.x, 0.1, tp.y), 0.0, 1.6, "")
 	# --- lac : nénuphars et plantes d'eau
 	var l: Vector2 = WorldData.LAKE_CENTER
 	for k in range(40):

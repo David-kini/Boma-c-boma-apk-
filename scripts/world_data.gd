@@ -181,6 +181,8 @@ func color_at(x: float, z: float, h: float, ny: float) -> Color:
 
 
 func zone_name_at(x: float, z: float) -> String:
+	if Vector2(x, z).length() < ARENA_RADIUS + 8.0:
+		return "Grande Arène"
 	var best: String = "Terres sauvages"
 	var best_score: float = 0.0
 	for key in ZONES:

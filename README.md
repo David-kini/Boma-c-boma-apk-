@@ -11,6 +11,20 @@ Godot 4.3+ (GL Compatibility), GDScript. Solo, hors ligne.
 Le workflow `.github/workflows/android.yml` exporte un APK debug 32 bits (armeabi-v7a, pour Tecno Pop 7) à chaque push sur `main`
 (onglet Actions → artefact `DuelEclair-apk`). Export manuel : Projet → Exporter → Android.
 
+## Grande Arène et textures photo (v0.10)
+- Nouvelle arène inspirée du concept art : sol de dalles sombres polies (effet mouillé)
+  avec incrustations d'or (cercles, rayons, runes, étoile), 8 tours gothiques à flèches
+  dorées, arcades, 4 grandes portes, 8 statues encapuchonnées tenant un cristal bleu,
+  aqueduc à deux étages, 6 îles flottantes avec tours et cascades.
+- Vraies textures photo CC0 (ambientCG Ground037 et Rock023) pour le terrain, la pierre
+  des bâtiments et les îles (Assets/Textures/Photo, voir LICENCES.txt).
+- Ciel avec nuages qui défilent (aussi en Ultra très bas). Une image de ciel réelle
+  peut être ajoutée : Assets/Textures/Photo/ciel.jpg (panorama), utilisée automatiquement.
+- Stabilité : mémoire des textures divisée par 4 (95 Mo -> 37 Mo de mémoire vidéo).
+  Rapport de diagnostic : si le jeu se ferme brutalement, l'écran titre affiche au
+  lancement suivant l'état du jeu au moment de la fermeture.
+- Le joueur apparaît maintenant au centre de l'arène.
+
 ## Ennemis, boss, inventaire (v0.9)
 - 7 types d'ennemis : squelette, guerrier, voleur, mage (zones des monstres et ruines),
   **Barbare** (lent, très résistant, hache à deux mains — zone volcanique),
