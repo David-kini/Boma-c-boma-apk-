@@ -33,14 +33,18 @@ jobs:
         run: godot --headless --verbose --import || true
       - name: Exporter l'APK (debug)
         run: godot --headless --verbose --export-debug "Android" build/android/DuelEclair.apk
+      - name: Exporter l'APK 64 bits (arm64-v8a)
+        run: godot --headless --verbose --export-debug "Android64" build/android/DuelEclair-64bit.apk
       - uses: actions/upload-artifact@v4
         with:
           name: DuelEclair-apk
-          path: build/android/DuelEclair.apk
+          path: build/android/*.apk
       - name: Publier l'APK (lien direct)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
           name: Duel Eclair APK ${{ github.run_number }}
           make_latest: true
-          files: build/android/DuelEclair.apk
+          files: |
+            build/android/DuelEclair.apk
+            build/android/DuelEclair-64bit.apk
