@@ -1,0 +1,62 @@
+name: Générer 3D (héros Boma Choc, sur processeur)
+
+# Lancé uniquement à la demande. Fabrique la forme 3D du héros avec Hunyuan3D-2
+# (3 variantes en parallèle), puis publie les résultats dans une release « gen3d-N ».
+on:
+  workflow_dispatch:
+    inputs:
+      modes:
+        description: "Variantes (JSON)"
+        default: '["v2","mv","mini"]'
+
+permissions:
+  contents: write
+
+jobs:
+  forme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ fromJSON(github.event.inputs.modes || '["v2","mv","mini"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Libérer de la place
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+      - name: Installer PyTorch (CPU) et Hunyuan3D
+        run: |
+          pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install hy3dgen==2.0.2 huggingface_hub
+          mkdir -p out
+          pip freeze > out/pip_${{ matrix.mode }}.txt
+      - name: Générer la forme (${{ matrix.mode }})
+        run: |
+          set -o pipefail
+          python -u tools/gen3d/gen_shape.py ${{ matrix.mode }} out 2>&1 | tee out/log_${{ matrix.mode }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forme-${{ matrix.mode }}
+          path: out/
+  publier:
+    needs: forme
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: res
+          merge-multiple: true
+      - run: ls -la res
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gen3d-${{ github.run_number }}
+          name: Génération 3D ${{ github.run_number }}
+          make_latest: false
+          prerelease: true
+          files: res/*
