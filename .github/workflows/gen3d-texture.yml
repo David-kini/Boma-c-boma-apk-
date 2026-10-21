@@ -1,0 +1,57 @@
+name: Générer 3D — texture (à partir d'une forme déjà faite)
+
+# Lancé uniquement à la demande. Prend les formes shape_*.glb d'une release gen3d-N,
+# les texture avec les images de référence, et publie MainHero (glb + fbx) dans gen3d-N-tex.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release contenant les formes (ex. gen3d-2)"
+        required: true
+      faces:
+        description: "Nombre de faces visé"
+        default: "24000"
+
+permissions:
+  contents: write
+
+jobs:
+  texture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Installer
+        run: |
+          pip install trimesh xatlas fast-simplification opencv-python-headless scipy pillow numpy rembg onnxruntime
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libsm6 > /dev/null
+          curl -sL https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz | tar xJ
+      - name: Récupérer les formes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p formes res
+          gh release download "${{ github.event.inputs.tag }}" -p "shape_*.glb" -D formes -R "${{ github.repository }}"
+          ls -la formes
+      - name: Texturer et convertir
+        run: |
+          set -o pipefail
+          for f in formes/shape_*.glb; do
+            m=$(basename "$f" .glb | sed 's/shape_//')
+            mkdir -p "res/$m"
+            python -u tools/gen3d/tex_project.py "$f" tools/gen3d/input "res/$m" "${{ github.event.inputs.faces }}" 2>&1 | tee "res/$m/log.txt" || continue
+            ./blender-4.2.3-linux-x64/blender -b -P tools/gen3d/to_fbx.py -- "res/$m/MainHero.glb" "res/$m/MainHero.fbx" 2>&1 | tail -3
+            for x in res/$m/*; do mv "$x" "res/${m}_$(basename $x)"; done
+            rmdir "res/$m"
+          done
+          ls -la res
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}-tex-${{ github.run_number }}
+          name: Héros texturé (${{ github.event.inputs.tag }}, essai ${{ github.run_number }})
+          make_latest: false
+          prerelease: true
+          files: res/*
