@@ -40,7 +40,7 @@ TARGET_FACES = int(sys.argv[4]) if len(sys.argv) > 4 else 24000
 KIND = sys.argv[5] if len(sys.argv) > 5 else ("epee" if "epee" in os.path.basename(SHAPE) else "hero")
 HEIGHT = 1.8 if KIND == "hero" else 1.25
 NAME = "MainHero" if KIND == "hero" else "HeroSword"
-TEX = 1024
+TEX = int(os.environ.get("TEX", "2048"))
 os.makedirs(OUT, exist_ok=True)
 
 # ------------------------------------------------------------------ maillage
@@ -166,15 +166,26 @@ BASE = max(base_scores, key=base_scores.get)
 log("orientation de face :", BASE, "° (score %.3f)" % base_scores[BASE])
 YAW = {"face": BASE}
 if "dos" in views:
-    dm = mask_norm(views["dos"])
-    sc_d = {d: iou(silhouette(BASE + 180 + d), dm) for d in range(-30, 31, 10)}
-    YAW["dos"] = BASE + 180 + max(sc_d, key=sc_d.get)
-for side in ("gauche", "droite"):
-    if side in views:
-        sm = mask_norm(views[side])
-        sc_s = {d: iou(silhouette(BASE + d), sm) for d in list(range(-110, -14, 5)) + list(range(15, 111, 5))}
-        YAW[side] = BASE + max(sc_s, key=sc_s.get)
-        REPORT["score_" + side] = round(float(max(sc_s.values())), 3)
+    YAW["dos"] = BASE + 180          # la vue de dos est une vraie vue de dos
+NEG = list(range(-110, -24, 5))
+POS = list(range(25, 111, 5))
+sides = [k for k in ("gauche", "droite") if k in views]
+best_side = {}
+for k in sides:
+    sm = mask_norm(views[k])
+    best_side[k] = {"neg": max(((iou(silhouette(BASE + d), sm), d) for d in NEG)),
+                    "pos": max(((iou(silhouette(BASE + d), sm), d) for d in POS))}
+if len(sides) == 2:
+    # les deux vues de 3/4 sont forcément de côtés opposés
+    a, b = best_side["gauche"], best_side["droite"]
+    opt1 = a["neg"][0] + b["pos"][0]
+    opt2 = a["pos"][0] + b["neg"][0]
+    pick = {"gauche": a["neg"], "droite": b["pos"]} if opt1 >= opt2 else {"gauche": a["pos"], "droite": b["neg"]}
+else:
+    pick = {k: max(best_side[k].values()) for k in sides}
+for k in sides:
+    YAW[k] = BASE + pick[k][1]
+    REPORT["score_" + k] = round(float(pick[k][0]), 3)
 log("angles retenus :", YAW)
 REPORT["angles"] = {k: int(a - BASE) for k, a in YAW.items()}
 REPORT["score_face"] = round(float(base_scores[BASE]), 3)
@@ -274,7 +285,13 @@ def project_view(key, weight, rgb=None, region=None):
     mx0, mx1 = pv[:, 0].min(), pv[:, 0].max()
     my0, my1 = pv[:, 1].min(), pv[:, 1].max()
     k = (y1b - y0b) / (my1 - my0)
-    cxm, cxi = (mx0 + mx1) / 2, (x0b + x1b) / 2
+    # centrage horizontal sur la TÊTE (la boîte englobante est faussée par l'épée et le manteau)
+    band = 0.12
+    hm = pv[:, 1] > my1 - (my1 - my0) * band
+    cxm = float(np.median(pv[hm, 0])) if hm.sum() > 10 else (mx0 + mx1) / 2
+    rows = vw["mask"][y0b:int(y0b + (y1b - y0b) * band) + 1]
+    cols = np.nonzero(rows)[1]
+    cxi = float(np.median(cols)) if len(cols) > 10 else (x0b + x1b) / 2
 
     def to_px(q):
         return np.stack([(q[:, 0] - cxm) * k + cxi, (my1 - q[:, 1]) * k + y0b], 1)
@@ -290,7 +307,8 @@ def project_view(key, weight, rgb=None, region=None):
     ok = vis & vw["mask"][yi, xi] & (facing > 0.15)
     if region is not None:
         ok &= region(px)
-    w = weight * facing ** 2 * ok
+    # puissance 4 : chaque zone prend surtout la vue qui la regarde de face (moins d'étirement)
+    w = weight * facing ** 4 * ok
     if rgb is not None and rgb.shape[:2] != (H, W):
         raise ValueError("image non alignée")
     col = bilinear(img, px[:, 0], px[:, 1])
@@ -336,14 +354,19 @@ try:
         Hf, Wf = fr["mask"].shape
         M = np.float32([[scl, 0, x0b + lx - cx0 * scl], [0, scl, y0b + ly - cy0 * scl]])
         warped = cv2.warpAffine(close["rgb"], M, (Wf, Hf), flags=cv2.INTER_LINEAR)
-        wmask = cv2.warpAffine(close["mask"].astype(np.uint8), M, (Wf, Hf), flags=cv2.INTER_NEAREST) > 0
+        cm = cv2.erode(close["mask"].astype(np.uint8), np.ones((15, 15), np.uint8))
+        wmask = cv2.warpAffine(cm, M, (Wf, Hf), flags=cv2.INTER_NEAREST) > 0
         fx0, fy0 = x0b + lx, y0b + ly
         fx1, fy1 = fx0 + head.shape[1] * scl, fy0 + head.shape[0] * scl * 0.85
 
         def in_face(px):
             xi = np.clip(px[:, 0].astype(int), 0, Wf - 1)
             yi = np.clip(px[:, 1].astype(int), 0, Hf - 1)
-            return (px[:, 0] > fx0) & (px[:, 0] < fx1) & (px[:, 1] > fy0) & (px[:, 1] < fy1) & wmask[yi, xi]
+            # ellipse du visage (évite le halo du fond autour de la tête)
+            ex, ey = (fx0 + fx1) / 2, (fy0 + fy1) / 2
+            rx, ry = (fx1 - fx0) * 0.42, (fy1 - fy0) * 0.5
+            inside = ((px[:, 0] - ex) / rx) ** 2 + ((px[:, 1] - ey) / ry) ** 2 < 1.0
+            return inside & wmask[yi, xi]
 
         project_view("face", 6.0, rgb=warped, region=in_face)
         face_ok = True
@@ -371,7 +394,10 @@ tex_img.save(os.path.join(OUT, NAME + "_albedo.png"))
 hsv = cv2.cvtColor((tex * 255).astype(np.uint8), cv2.COLOR_RGB2HSV)
 glow = ((hsv[:, :, 0] > 95) & (hsv[:, :, 0] < 135) & (hsv[:, :, 1] > 90) & (hsv[:, :, 2] > 150)).astype(np.float32)
 glow = cv2.GaussianBlur(glow, (5, 5), 0)[:, :, None]
-emi_img = Image.fromarray((tex * glow * 255).astype(np.uint8))
+# + un peu de l'image elle-même : la texture vient de photos déjà éclairées, elle ne doit
+#   pas devenir toute noire côté ombre (le dos et le manteau noir restent lisibles)
+emi = np.clip(tex * (0.28 + 0.72 * glow), 0, 1)
+emi_img = Image.fromarray((emi * 255).astype(np.uint8))
 emi_img.save(os.path.join(OUT, NAME + "_lueur.png"))
 REPORT["lueur_pct"] = round(float(glow.mean() * 100), 2)
 
