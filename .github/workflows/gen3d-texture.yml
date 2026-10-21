@@ -42,8 +42,11 @@ jobs:
           for f in formes/shape_*.glb; do
             m=$(basename "$f" .glb | sed 's/shape_//')
             mkdir -p "res/$m"
-            python -u tools/gen3d/tex_project.py "$f" tools/gen3d/input "res/$m" "${{ github.event.inputs.faces }}" 2>&1 | tee "res/$m/log.txt" || continue
-            ./blender-4.2.3-linux-x64/blender -b -P tools/gen3d/to_fbx.py -- "res/$m/MainHero.glb" "res/$m/MainHero.fbx" 2>&1 | tail -3
+            nf="${{ github.event.inputs.faces }}"; case "$m" in epee*) nf=8000;; esac
+            python -u tools/gen3d/tex_project.py "$f" tools/gen3d/input "res/$m" "$nf" 2>&1 | tee "res/$m/log.txt" || continue
+            for g in res/$m/*.glb; do
+              ./blender-4.2.3-linux-x64/blender -b -P tools/gen3d/to_fbx.py -- "$g" "${g%.glb}.fbx" 2>&1 | tail -3
+            done
             for x in res/$m/*; do mv "$x" "res/${m}_$(basename $x)"; done
             rmdir "res/$m"
           done

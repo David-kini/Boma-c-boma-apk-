@@ -37,6 +37,9 @@ def log(*a):
 
 SHAPE, INP, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 TARGET_FACES = int(sys.argv[4]) if len(sys.argv) > 4 else 24000
+KIND = sys.argv[5] if len(sys.argv) > 5 else ("epee" if "epee" in os.path.basename(SHAPE) else "hero")
+HEIGHT = 1.8 if KIND == "hero" else 1.25
+NAME = "MainHero" if KIND == "hero" else "HeroSword"
 TEX = 1024
 os.makedirs(OUT, exist_ok=True)
 
@@ -60,7 +63,7 @@ REPORT["faces"] = int(len(m.faces))
 
 # normalisation : hauteur 1,80 m, pieds à y = 0, centré en x/z
 lo, hi = m.bounds
-s = 1.8 / (hi[1] - lo[1])
+s = HEIGHT / (hi[1] - lo[1])
 m.apply_translation(-np.array([(lo[0] + hi[0]) / 2, lo[1], (lo[2] + hi[2]) / 2]))
 m.apply_scale(s)
 
@@ -107,12 +110,15 @@ def _session():
     return _S[0]
 
 
-views = {
-    "face": load_view("1_face_avant.png"),
-    "gauche": load_view("2_gauche.png"),
-    "dos": load_view("3_dos.png"),
-    "droite": load_view("4_droite.png"),
-}
+if KIND == "hero":
+    views = {
+        "face": load_view("1_face_avant.png"),
+        "gauche": load_view("2_gauche.png"),
+        "dos": load_view("3_dos.png"),
+        "droite": load_view("4_droite.png"),
+    }
+else:
+    views = {"face": load_view("epee_avant.png"), "gauche": load_view("epee_cote.png"), "dos": load_view("epee_dos.png")}
 views = {k: vv for k, vv in views.items() if vv is not None}
 log("vues chargées :", list(views))
 
@@ -301,6 +307,8 @@ for key in views:
 # ------------------------------------------------------------------ gros plan du visage
 face_ok = False
 try:
+    if KIND != "hero":
+        raise RuntimeError("pas de visage pour l'épée")
     close = load_view("visage_avant.png", maxh=900)
     fr = views["face"]
     g_front = cv2.cvtColor((fr["rgb"] * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
@@ -356,15 +364,24 @@ log("texels vus : %.1f %%" % (100.0 * have.mean()))
 # zones jamais vues et marges entre îlots : couleur du texel vu le plus proche
 _, (iy, ix) = ndimage.distance_transform_edt(~seen, return_indices=True)
 tex = tex[iy, ix]
-tex_img = Image.fromarray((np.clip(tex, 0, 1) * 255).astype(np.uint8))
-tex_img.save(os.path.join(OUT, "MainHero_albedo.png"))
+tex = np.clip(tex, 0, 1)
+tex_img = Image.fromarray((tex * 255).astype(np.uint8))
+tex_img.save(os.path.join(OUT, NAME + "_albedo.png"))
+# lueur : seules les zones bleues très lumineuses (pierres, éclairs de la lame) brillent
+hsv = cv2.cvtColor((tex * 255).astype(np.uint8), cv2.COLOR_RGB2HSV)
+glow = ((hsv[:, :, 0] > 95) & (hsv[:, :, 0] < 135) & (hsv[:, :, 1] > 90) & (hsv[:, :, 2] > 150)).astype(np.float32)
+glow = cv2.GaussianBlur(glow, (5, 5), 0)[:, :, None]
+emi_img = Image.fromarray((tex * glow * 255).astype(np.uint8))
+emi_img.save(os.path.join(OUT, NAME + "_lueur.png"))
+REPORT["lueur_pct"] = round(float(glow.mean() * 100), 2)
 
 # ------------------------------------------------------------------ export
-mat = trimesh.visual.material.PBRMaterial(name="MainHero", baseColorTexture=tex_img, metallicFactor=0.15,
-                                          roughnessFactor=0.65)
+mat = trimesh.visual.material.PBRMaterial(name=NAME, baseColorTexture=tex_img, metallicFactor=0.15 if KIND == "hero" else 0.5,
+                                          roughnessFactor=0.65 if KIND == "hero" else 0.4,
+                                          emissiveTexture=emi_img, emissiveFactor=[1.0, 1.0, 1.0])
 out = trimesh.Trimesh(V, F, visual=trimesh.visual.TextureVisuals(uv=UV, material=mat), process=False)
-out.export(os.path.join(OUT, "MainHero.glb"))
-REPORT["glb_octets"] = os.path.getsize(os.path.join(OUT, "MainHero.glb"))
+out.export(os.path.join(OUT, NAME + ".glb"))
+REPORT["glb_octets"] = os.path.getsize(os.path.join(OUT, NAME + ".glb"))
 REPORT["duree_s"] = round(time.time() - T0)
 json.dump(REPORT, open(os.path.join(OUT, "rapport_texture.json"), "w"), indent=1, ensure_ascii=False)
 log("terminé :", REPORT)

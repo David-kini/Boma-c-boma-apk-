@@ -45,6 +45,9 @@ CFG = {
     "v2": ("tencent/Hunyuan3D-2", "hunyuan3d-dit-v2-0", 30, 5.0),
     "mv": ("tencent/Hunyuan3D-2mv", "hunyuan3d-dit-v2-mv", 30, 5.0),
     "mini": ("tencent/Hunyuan3D-2mini", "hunyuan3d-dit-v2-mini", 30, 5.0),
+    # l'épée (créée à part, comme demandé)
+    "epee": ("tencent/Hunyuan3D-2", "hunyuan3d-dit-v2-0", 30, 5.0),
+    "epee_mv": ("tencent/Hunyuan3D-2mv", "hunyuan3d-dit-v2-mv", 30, 5.0),
 }
 repo, sub, steps, guid = CFG[MODE]
 log("chargement", repo, sub)
@@ -53,6 +56,10 @@ log("modèle chargé")
 
 if MODE == "mv":
     image = {"front": prep("1_face_avant.png"), "back": prep("3_dos.png")}
+elif MODE == "epee":
+    image = prep("epee_avant.png")
+elif MODE == "epee_mv":
+    image = {"front": prep("epee_avant.png"), "left": prep("epee_cote.png"), "back": prep("epee_dos.png")}
 else:
     image = prep("1_face_avant.png")
 log("images prêtes")
