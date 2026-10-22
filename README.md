@@ -188,3 +188,4 @@ Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
 - Surchauffe : une épée utilisée 30 coups d'affilée est remplacée automatiquement par la suivante débloquée.
 - Attaque spéciale au ralenti : au 5e coup du combo près d'un ennemi, il est projeté dans le ciel, le héros le rejoint, le frappe 5 fois en vol puis redescend (onde de choc).
 - Correctifs : remise à zéro complète du héros après la scène d'intro (plus de pose assise), fermeture propre (bouton Retour sauvegarde et quitte, ralenti remis à 1).
+- **Forme divine géante, une par épée** : le héros grandit de ×2,4 à ×3,2 (Géant de feu, de glace, Titan de l'éclair, Colosse venimeux, Géant du vide, Géant solaire, Seigneur démon géant, Dieu géant). Aura aux couleurs de l'arme, portée des coups agrandie, et le pouvoir de l'épée (feu, gel, paralysie…) frappe en continu autour de lui. Onde de choc de départ qui projette les ennemis.

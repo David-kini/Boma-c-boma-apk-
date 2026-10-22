@@ -106,9 +106,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 		player.call("set_wings", String(args["wings"]))
 	if args.has("fly"):
 		GameInput.fly_buffer = 1.0
-	if args.has("divine"):
-		player.set("energy", 100.0)
-		GameInput.divine_buffer = 1.0
+	_div_req = args.has("divine")
 	if args.has("menu"):
 		_open_menu_at = 25
 	shoot_at = int(args.get("shoot", "-1"))
@@ -132,6 +130,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 var autoattack: bool = false
 var dragon_mode: String = ""
 var statut: String = ""
+var _div_req: bool = false
 var cine_skip: int = -1
 var _test_en: Node3D = null
 var shoot_at: int = -1
@@ -219,6 +218,11 @@ func _process(delta: float) -> void:
 			var dd: Vector3 = dg2.global_position - player.global_position
 			if _n == frames - 1:
 				print("BILAN dragon pos=", dg2.global_position.snapped(Vector3.ONE), " mode=", dg2.get("_mode"), " d=", int(dd.length()))
+	if _div_req and _n % 10 == 0:
+		print("BILAN geant n=", _n, " k=", player.get("giant_k"), " cible=", player.get("_giant_target"), " rigscale=", (player.get("rig") as Node3D).scale, " scale=", Engine.time_scale)
+	if _div_req and _n == 4:
+		player.set("energy", float(player.get("max_energy")))
+		GameInput.divine_buffer = 0.5
 	if cine_skip > 0 and _n == cine_skip:
 		get_parent().get("cinematic").call("skip")
 	if cine_skip > 0 and _n > cine_skip and _n % 20 == 0:

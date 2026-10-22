@@ -8,6 +8,8 @@ var _ring: MeshInstance3D
 var _sparks: Array = []
 var active: bool = false
 var _k: float = 0.0
+var _base_a: float = 0.14
+var _ring_a: float = 0.8
 
 
 func _add_mat(c: Color) -> StandardMaterial3D:
@@ -60,6 +62,18 @@ func _ready() -> void:
 		_sparks.append([s, randf() * TAU, randf(), randf_range(0.35, 0.75)])
 
 
+## Couleurs de la forme divine de l'arme (enveloppe, anneau, étincelles).
+func set_theme(main: Color, ring: Color, spark: Color) -> void:
+	if _shell == null:
+		return
+	_base_a = main.a
+	(_shell.material_override as StandardMaterial3D).albedo_color = main
+	(_ring.material_override as StandardMaterial3D).albedo_color = ring
+	_ring_a = ring.a
+	for sp in _sparks:
+		((sp[0] as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = spark
+
+
 func set_active(on: bool) -> void:
 	active = on
 	if on:
@@ -72,11 +86,11 @@ func _process(delta: float) -> void:
 		visible = false
 		return
 	_t += delta
-	var pulse: float = 0.14 + 0.08 * sin(_t * 8.0)
+	var pulse: float = _base_a * 0.8 + _base_a * 0.5 * sin(_t * 8.0)
 	(_shell.material_override as StandardMaterial3D).albedo_color.a = pulse * _k
 	_shell.scale = Vector3.ONE * (1.0 + 0.04 * sin(_t * 8.0))
 	_ring.rotation.y = _t * 3.0
-	(_ring.material_override as StandardMaterial3D).albedo_color.a = 0.8 * _k
+	(_ring.material_override as StandardMaterial3D).albedo_color.a = _ring_a * _k
 	for sp in _sparks:
 		var node: MeshInstance3D = sp[0]
 		var h: float = fmod(float(sp[2]) + _t * 0.6, 1.0)

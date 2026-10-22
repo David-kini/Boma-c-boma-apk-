@@ -32,6 +32,7 @@ var _shake: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var mode: String = "explore"
 var _dist_mult: float = 1.0
+var size_mult: float = 1.0       # héros géant (forme divine) : la caméra recule
 var _pivot_add: float = 0.0
 var _lateral: float = 0.0
 var _lateral_goal: float = 0.0
@@ -124,7 +125,7 @@ func _process(delta: float) -> void:
 	var rd: float = delta / maxf(Engine.time_scale, 0.05)    # delta réel
 	_update_mode(rd)
 	if target != null:
-		var goal: Vector3 = target.global_position + Vector3(0.0, pivot_height + _pivot_add, 0.0)
+		var goal: Vector3 = target.global_position + Vector3(0.0, (pivot_height + _pivot_add) * pow(size_mult, 1.3), 0.0)
 		var p: Vector3 = global_position
 		var kxz: float = 1.0 - exp(-14.0 * delta)
 		var ky: float = 1.0 - exp(-7.0 * delta)
@@ -144,7 +145,7 @@ func _process(delta: float) -> void:
 		pitch_view = lerpf(pitch, -0.95, 0.8)
 	_zoom_t -= rd
 	var zm: float = _zoom_mult if _zoom_t > 0.0 else 1.0
-	var want_len: float = distance * _dist_mult * zm
+	var want_len: float = distance * _dist_mult * zm * size_mult
 	spring.spring_length = lerpf(spring.spring_length, want_len, 1.0 - exp(-6.0 * rd))
 	_lateral_t -= rd
 	if _lateral_t <= 0.0:

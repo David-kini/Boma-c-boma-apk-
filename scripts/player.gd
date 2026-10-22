@@ -314,6 +314,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_timers(delta)
 	_update_powers(delta)
+	_update_giant(delta)
 	_flip_t -= delta
 	_pose_t -= delta
 	if ulti_t >= 0.0 and not is_dead:
@@ -714,7 +715,7 @@ func _deal_hits(a: Dictionary) -> void:
 			if absf(en.global_position.y - global_position.y) > hr + 2.5:
 				continue
 			dist = maxf(0.0, dist - hr)
-		if dist > float(a["range"]):
+		if dist > float(a["range"]) * (1.0 + (giant_k - 1.0) * 0.6):
 			continue
 		if float(a["arc"]) > -1.0 and dist > 0.4 and fwd.dot(to_e.normalized()) < float(a["arc"]):
 			continue
@@ -752,7 +753,7 @@ func _deal_hits(a: Dictionary) -> void:
 func _apply_sword_power(en: Node3D) -> void:
 	if not is_instance_valid(en) or String(en.get("state")) == "dead" or not en.has_method("apply_element"):
 		return
-	var el: String = "divin" if is_divine else String(Weapons.get_def(weapon_index)["element"])
+	var el: String = String(Weapons.get_def(weapon_index)["element"])
 	var frozen: bool = bool(en.call("has_status", "gel")) or bool(en.call("has_status", "para"))
 	if not frozen and not en.get("is_boss") and _atk_i >= 2:
 		var dir: Vector3 = en.global_position - global_position
@@ -948,20 +949,89 @@ func _fly_move(delta: float, wish: Vector3, has_input: bool) -> void:
 		face_yaw = atan2(-velocity.x, -velocity.z)
 
 
+# ---------------------------------------------------------------- formes divines géantes
+## Chaque épée a sa propre forme divine : le héros devient un géant, aura aux couleurs de
+## l'élément, et le pouvoir de l'épée frappe en continu tout autour de lui.
+const FORMS: Dictionary = {
+	"feu": {"name": "GÉANT DE FEU", "k": 2.6, "main": Color(1.0, 0.35, 0.05, 0.2), "ring": Color(1.0, 0.5, 0.1, 0.85), "spark": Color(1.0, 0.6, 0.15)},
+	"glace": {"name": "GÉANT DE GLACE", "k": 2.5, "main": Color(0.5, 0.85, 1.0, 0.2), "ring": Color(0.7, 0.95, 1.0, 0.85), "spark": Color(0.85, 1.0, 1.0)},
+	"eclair": {"name": "TITAN DE L'ÉCLAIR", "k": 2.5, "main": Color(0.3, 0.5, 1.0, 0.2), "ring": Color(0.7, 0.85, 1.0, 0.9), "spark": Color(0.9, 0.95, 1.0)},
+	"poison": {"name": "COLOSSE VENIMEUX", "k": 2.4, "main": Color(0.3, 0.9, 0.2, 0.2), "ring": Color(0.5, 1.0, 0.3, 0.85), "spark": Color(0.7, 1.0, 0.4)},
+	"vide": {"name": "GÉANT DU VIDE", "k": 2.7, "main": Color(0.5, 0.15, 0.9, 0.22), "ring": Color(0.7, 0.4, 1.0, 0.85), "spark": Color(0.8, 0.55, 1.0)},
+	"solaire": {"name": "GÉANT SOLAIRE", "k": 2.8, "main": Color(1.0, 0.7, 0.1, 0.22), "ring": Color(1.0, 0.85, 0.3, 0.9), "spark": Color(1.0, 0.9, 0.5)},
+	"ombre": {"name": "SEIGNEUR DÉMON GÉANT", "k": 3.0, "main": Color(0.5, 0.0, 0.05, 0.3), "ring": Color(1.0, 0.1, 0.15, 0.9), "spark": Color(1.0, 0.25, 0.25)},
+	"divin": {"name": "DIEU GÉANT", "k": 3.2, "main": Color(1.0, 0.75, 0.2, 0.22), "ring": Color(1.0, 0.85, 0.35, 0.9), "spark": Color(1.0, 0.95, 0.6)},
+}
+var giant_k: float = 1.0
+var _giant_target: float = 1.0
+var _form_pulse: float = 0.0
+
+
+func _form_element() -> String:
+	return String(Weapons.get_def(weapon_index)["element"])
+
+
+func _form() -> Dictionary:
+	return FORMS.get(_form_element(), FORMS["divin"])
+
+
+## Grandit / rapetisse en douceur, aura à l'échelle, caméra qui recule, pouvoir de la forme.
+func _update_giant(delta: float) -> void:
+	if not is_equal_approx(giant_k, _giant_target):
+		giant_k = move_toward(giant_k, _giant_target, delta * (1.1 if _giant_target > giant_k else 2.0))
+		if rig != null:
+			rig.scale = Vector3.ONE * giant_k
+		aura.scale = Vector3.ONE * giant_k
+		if cam != null:
+			cam.set("size_mult", pow(giant_k, 0.55))
+	if is_divine and giant_k > 1.5:
+		_form_pulse -= delta
+		if _form_pulse <= 0.0:
+			_form_pulse = 0.7
+			var el: String = _form_element()
+			var f: Dictionary = _form()
+			var r: float = 3.2 * giant_k
+			CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.2, 0.0), f["ring"], r, 0.5)
+			for en in _enemies_near(global_position, r):
+				if en.has_method("apply_element"):
+					en.call("take_damage", 8.0 * _dmg_mult(), global_position)
+					en.call("apply_element", el)
+					if not bool(en.get("is_boss")):
+						en.call("knockback", en.global_position - global_position, 6.0)
+
+
+func _start_giant() -> void:
+	var f: Dictionary = _form()
+	_giant_target = float(f["k"])
+	aura.call("set_theme", f["main"], f["ring"], f["spark"])
+	announce.emit(String(f["name"]) + " !")
+	if cam != null:
+		cam.call("slow_mo", 1.4, 0.35)
+		cam.call("shake", 0.8)
+	for k in range(14):
+		var ang: float = float(k) / 14.0 * TAU
+		CombatFx.spark(get_parent(), global_position + Vector3(cos(ang) * 4.0, 0.4, sin(ang) * 4.0), f["spark"], 2.2)
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.2, 0.0), f["ring"], 14.0, 0.8)
+	CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.5, 0.0), Color(1, 1, 1, 0.8), 8.0, 0.5)
+	Sfx.play("ulti_boom", 0.6)
+
+
 func _start_divine() -> void:
 	is_divine = true
 	divine_left = DIVINE_TIME
 	aura.call("set_active", true)
 	_equip_weapon(weapon_index, true)
 	Sfx.play("divine")
-	announce.emit("TRANSFORMATION DIVINE !")
+	_start_giant()
 	if cam != null:
 		cam.call("shake", 0.5)
 	# onde de choc : dégâts et recul autour du héros
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var en: Node3D = e as Node3D
-		if en != null and String(en.get("state")) != "dead" and en.global_position.distance_to(global_position) < 6.0:
+		if en != null and String(en.get("state")) != "dead" and en.global_position.distance_to(global_position) < 6.0 * _giant_target:
 			en.call("take_damage", 35.0, global_position)
+			if en.has_method("knockback"):
+				en.call("knockback", en.global_position - global_position, 14.0)
 	for k in range(8):
 		var ang: float = float(k) / 8.0 * TAU
 		CombatFx.spark(get_parent(), global_position + Vector3(cos(ang) * 3.0, 0.5, sin(ang) * 3.0), Color(1.0, 0.8, 0.3), 1.5)
@@ -975,6 +1045,7 @@ func _stop_divine() -> void:
 	energy = 0.0
 	energy_changed.emit(energy, max_energy)
 	aura.call("set_active", false)
+	_giant_target = 1.0
 	_equip_weapon(weapon_index, false)
 
 
@@ -984,7 +1055,7 @@ func _equip_weapon(i: int, divine_look: bool) -> void:
 	var d: Dictionary = Weapons.get_def(weapon_index)
 	var sw: Node3D = Sword.new()
 	sw.name = "Arme"
-	sw.set("element", "divin" if divine_look else String(d["element"]))
+	sw.set("element", String(d["element"]))
 	sw.set("length_scale", float(d["len"]))
 	sw.set("width_scale", float(d["width"]))
 	rig.call("equip_weapon", sw)
@@ -1193,7 +1264,7 @@ func _double_jump(wish: Vector3, has_input: bool) -> void:
 
 
 func _weapon_color() -> Color:
-	var el: String = "divin" if is_divine else String(Weapons.get_def(weapon_index)["element"])
+	var el: String = String(Weapons.get_def(weapon_index)["element"])
 	var e: Dictionary = Sword.ELEMENTS.get(el, Sword.ELEMENTS["eclair"])
 	return e["core"]
 
