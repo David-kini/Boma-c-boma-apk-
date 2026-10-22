@@ -405,10 +405,19 @@ log("texels vus : %.1f %%" % (100.0 * have.mean()))
 _, (iy, ix) = ndimage.distance_transform_edt(~seen, return_indices=True)
 tex = tex[iy, ix]
 if KIND == "tete":
-    # zones jamais photographiées (arrière du crâne) : couleur voisine adoucie, sans traînées
-    blur = cv2.GaussianBlur(tex, (0, 0), 6)
-    um = cv2.GaussianBlur((~seen).astype(np.float32), (0, 0), 3)[:, :, None]
-    tex = tex * (1 - um) + blur * um
+    # zones jamais photographiées (arrière du crâne) : cheveux ras blonds, couleur prise sur le
+    # haut du crâne de la photo de face, avec un léger grain ; transition douce avec le reste
+    fv = views["face"]
+    x0b, y0b, x1b, y1b = fv["bbox"]
+    top = fv["rgb"][y0b:y0b + int((y1b - y0b) * 0.07), x0b:x1b + 1]
+    tm = fv["mask"][y0b:y0b + int((y1b - y0b) * 0.07), x0b:x1b + 1]
+    hair = np.median(top[tm], axis=0) if tm.sum() > 20 else np.array([0.85, 0.72, 0.5])
+    REPORT["couleur_cheveux"] = [round(float(c), 3) for c in hair]
+    rng = np.random.default_rng(3)
+    grain = cv2.GaussianBlur(rng.normal(0, 1, (TEX, TEX)).astype(np.float32), (0, 0), 1.2)[:, :, None]
+    hair_tex = np.clip(hair[None, None, :] * (1 + 0.10 * grain), 0, 1)
+    um = cv2.GaussianBlur((~seen).astype(np.float32), (0, 0), 8)[:, :, None]
+    tex = tex * (1 - um) + hair_tex * um
 tex = np.clip(tex, 0, 1)
 tex_img = Image.fromarray((tex * 255).astype(np.uint8))
 tex_img.save(os.path.join(OUT, NAME + "_albedo.png"))
