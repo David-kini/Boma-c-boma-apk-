@@ -194,3 +194,4 @@ Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
 - **Arc** : touche B ou bouton du menu : l'épée devient un arc, avec son élément et son pouvoir (feu, gel, éclair…) sur chaque flèche. Quand toutes les épées surchauffent (14 s de refroidissement chacune), l'arme actuelle passe automatiquement en arc.
 - **Poison** cumulatif (jusqu'à 6 charges) ; démon des ailes visible ~1 s.
 - **Lame du Vent** (épée ou arc) : élément vent, chaque coup/flèche fait valser l'ennemi en l'air en tournoyant (les ennemis voisins aussi), avec anneaux de vent. Forme divine : Seigneur des tempêtes.
+- **Seigneur des tempêtes** (forme divine de la Lame du Vent) : dure 1 minute, aspire tous les ennemis à moins de 22 m qui tournoient en l'air autour du héros.

@@ -415,6 +415,10 @@ var _dot_t: float = 0.0
 var _spark_t: float = 0.0
 var _poison_stacks: int = 0
 var _vent_held: bool = false
+var _pull_t: float = 0.0
+var _pull_pos: Vector3 = Vector3.ZERO
+var _pull_lifted: bool = false
+var _pull_age: float = 0.0
 var _vent_t: float = 0.0
 
 
@@ -510,6 +514,30 @@ func _clear_status() -> void:
 ## Avance les statuts. Renvoie true si l'ennemi est bloqué (gel / paralysie).
 func _status_tick(delta: float) -> bool:
 	_immune = maxf(_immune - delta, 0.0)
+	if _pull_t > 0.0 and state != "dead":
+		_pull_t -= delta
+		if not _pull_lifted:
+			_pull_lifted = true
+			launch(7.0)
+		_pull_age += delta
+		state = "launched"
+		_air_hold = 0.3 if _pull_age > 0.4 else 0.0     # d'abord il monte, puis il flotte
+		var d: Vector3 = _pull_pos - global_position
+		d.y = 0.0
+		var dist: float = d.length()
+		var dir: Vector3 = d / maxf(dist, 0.01)
+		var tang: Vector3 = Vector3(-dir.z, 0.0, dir.x)
+		var inward: float = 9.0 if dist > 3.5 else -2.0
+		velocity.x = dir.x * inward + tang.x * 6.0
+		velocity.z = dir.z * inward + tang.z * 6.0
+		if _model != null:
+			_model.rotation.y += 11.0 * delta
+		if _pull_t <= 0.0:
+			_pull_lifted = false
+			_pull_age = 0.0
+			if _model != null:
+				_model.rotation.y = PI
+	_immune = _immune
 	if _st.is_empty():
 		return false
 	var locked: bool = false
@@ -648,6 +676,14 @@ func take_damage(amount: float, from_pos: Vector3, dot: bool = false) -> void:
 	velocity.x = knock.x
 	velocity.z = knock.z
 	velocity.y = 3.5      # petit saut : l'ennemi est propulsé en arrière
+
+
+## Aspiré par le Seigneur des tempêtes : monte en l'air, tourne autour de lui en tournoyant.
+func pull_toward(pos: Vector3) -> void:
+	if state == "dead" or is_boss or illusion:
+		return
+	_pull_pos = pos
+	_pull_t = 0.25
 
 
 ## Recul puissant (fin de combo).

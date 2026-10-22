@@ -122,6 +122,7 @@ var _fly_h: float = 5.0          # altitude visée au-dessus du sol
 var wings: Node3D
 var is_divine: bool = false
 var divine_left: float = 0.0
+var divine_total: float = 10.0
 var aura: Node3D
 var _autosave: float = 30.0
 # --- inventaire et personnalisation
@@ -907,7 +908,7 @@ func _update_powers(delta: float) -> void:
 			announce.emit("Énergie insuffisante : frappe des ennemis (%d %%)" % int(energy / max_energy * 100.0))
 	if is_divine:
 		divine_left -= delta
-		energy = max_energy * maxf(divine_left / DIVINE_TIME, 0.0)
+		energy = max_energy * maxf(divine_left / divine_total, 0.0)
 		energy_changed.emit(energy, max_energy)
 		if divine_left <= 0.0:
 			_stop_divine()
@@ -978,7 +979,7 @@ func _fly_move(delta: float, wish: Vector3, has_input: bool) -> void:
 ## l'élément, et le pouvoir de l'épée frappe en continu tout autour de lui.
 const FORMS: Dictionary = {
 	"feu": {"name": "GÉANT DE FEU", "k": 2.6, "main": Color(1.0, 0.35, 0.05, 0.2), "ring": Color(1.0, 0.5, 0.1, 0.85), "spark": Color(1.0, 0.6, 0.15)},
-	"vent": {"name": "SEIGNEUR DES TEMPÊTES", "k": 2.5, "main": Color(0.4, 1.0, 0.7, 0.2), "ring": Color(0.8, 1.0, 0.9, 0.85), "spark": Color(0.9, 1.0, 0.95)},
+	"vent": {"name": "SEIGNEUR DES TEMPÊTES", "time": 60.0, "k": 2.5, "main": Color(0.4, 1.0, 0.7, 0.2), "ring": Color(0.8, 1.0, 0.9, 0.85), "spark": Color(0.9, 1.0, 0.95)},
 	"glace": {"name": "GÉANT DE GLACE", "k": 2.5, "main": Color(0.5, 0.85, 1.0, 0.2), "ring": Color(0.7, 0.95, 1.0, 0.85), "spark": Color(0.85, 1.0, 1.0)},
 	"eclair": {"name": "TITAN DE L'ÉCLAIR", "k": 2.5, "main": Color(0.3, 0.5, 1.0, 0.2), "ring": Color(0.7, 0.85, 1.0, 0.9), "spark": Color(0.9, 0.95, 1.0)},
 	"poison": {"name": "COLOSSE VENIMEUX", "k": 2.4, "main": Color(0.3, 0.9, 0.2, 0.2), "ring": Color(0.5, 1.0, 0.3, 0.85), "spark": Color(0.7, 1.0, 0.4)},
@@ -1009,6 +1010,12 @@ func _update_giant(delta: float) -> void:
 		aura.scale = Vector3.ONE * giant_k
 		if cam != null:
 			cam.set("size_mult", pow(giant_k, 0.55))
+	if is_divine and giant_k > 1.5 and _form_element() == "vent":
+		# Seigneur des tempêtes : les ennemis sont aspirés autour de lui et valsent
+		for e in get_tree().get_nodes_in_group("enemies"):
+			var en2: Node3D = e as Node3D
+			if en2 != null and en2.has_method("pull_toward") and en2.global_position.distance_to(global_position) < 22.0:
+				en2.call("pull_toward", global_position)
 	if is_divine and giant_k > 1.5:
 		_form_pulse -= delta
 		if _form_pulse <= 0.0:
@@ -1043,7 +1050,8 @@ func _start_giant() -> void:
 
 func _start_divine() -> void:
 	is_divine = true
-	divine_left = DIVINE_TIME
+	divine_total = float(_form().get("time", DIVINE_TIME))
+	divine_left = divine_total
 	aura.call("set_active", true)
 	_equip_weapon(weapon_index, true)
 	Sfx.play("divine")
