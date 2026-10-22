@@ -48,7 +48,11 @@ CFG = {
     # l'épée (créée à part, comme demandé)
     "epee": ("tencent/Hunyuan3D-2", "hunyuan3d-dit-v2-0", 30, 5.0),
     "epee_mv": ("tencent/Hunyuan3D-2mv", "hunyuan3d-dit-v2-mv", 30, 5.0),
+    # la tête seule, à partir des gros plans (bien plus de détails sur le visage)
+    "tete": ("tencent/Hunyuan3D-2", "hunyuan3d-dit-v2-0", 40, 5.5),
+    "tete_mv": ("tencent/Hunyuan3D-2mv", "hunyuan3d-dit-v2-mv", 40, 5.5),
 }
+OCTREE = 384 if MODE.startswith("tete") else 256
 repo, sub, steps, guid = CFG[MODE]
 log("chargement", repo, sub)
 pipe = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(repo, subfolder=sub, device="cpu", dtype=torch.float32)
@@ -56,6 +60,10 @@ log("modèle chargé")
 
 if MODE == "mv":
     image = {"front": prep("1_face_avant.png"), "back": prep("3_dos.png")}
+elif MODE == "tete":
+    image = prep("tete_avant.png")
+elif MODE == "tete_mv":
+    image = {"front": prep("tete_avant.png"), "back": prep("tete_dos.png")}
 elif MODE == "epee":
     image = prep("epee_avant.png")
 elif MODE == "epee_mv":
@@ -73,7 +81,7 @@ mesh = pipe(
     image=image,
     num_inference_steps=steps,
     guidance_scale=guid,
-    octree_resolution=256,
+    octree_resolution=OCTREE,
     num_chunks=20000,
     generator=torch.manual_seed(1234),
     output_type="trimesh",
