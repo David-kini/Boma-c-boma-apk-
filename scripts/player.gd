@@ -708,6 +708,7 @@ func _deal_hits(a: Dictionary) -> void:
 		if a.has("aoe"):
 			falloff = lerpf(1.3, 0.7, clampf(dist / float(a["range"]), 0.0, 1.0))
 		en.call("take_damage", float(a["dmg"]) * _dmg_mult() * falloff, global_position)
+		_apply_sword_power(en)
 		hits += 1
 	if a.has("aoe"):
 		# 5e coup : éclair qui frappe tout autour
@@ -728,6 +729,35 @@ func _deal_hits(a: Dictionary) -> void:
 		add_ulti(4.0 * float(hits))
 		if cam != null:
 			cam.call("shake", 0.35 if _atk_i == 3 else 0.15)
+
+
+## Pouvoir de l'épée équipée, appliqué à chaque coup : glace = gèle, éclair = paralyse (avec
+## le bruit du tonnerre), feu = brûle (les flammes restent sur le corps), poison, vide = propulse
+## en l'air, divin = foudre + feu. Chaque coup repousse aussi l'ennemi.
+func _apply_sword_power(en: Node3D) -> void:
+	if not is_instance_valid(en) or String(en.get("state")) == "dead" or not en.has_method("apply_element"):
+		return
+	var el: String = "divin" if is_divine else String(Weapons.get_def(weapon_index)["element"])
+	var frozen: bool = bool(en.call("has_status", "gel")) or bool(en.call("has_status", "para"))
+	if not frozen and not en.get("is_boss") and _atk_i >= 2:
+		var dir: Vector3 = en.global_position - global_position
+		en.call("knockback", dir, 11.0 if _atk_i >= 3 else 7.0)
+	if el == "ombre":
+		# Épée du Démon : vol de vie
+		hp = minf(hp + 4.0, max_hp)
+		hp_changed.emit(hp, max_hp)
+		CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.2, 0.0), Color(0.9, 0.1, 0.2), 0.8)
+	elif el == "divin":
+		# Épée Divine : la foudre saute sur 2 autres ennemis proches
+		var n: int = 0
+		for o in _enemies_near(en.global_position, 8.0):
+			if o == en or n >= 2 or not o.has_method("apply_element"):
+				continue
+			n += 1
+			CombatFx.bolt(get_parent(), en.global_position + Vector3(0.0, 1.5, 0.0), o.global_position + Vector3(0.0, 1.2, 0.0), Color(1.0, 0.9, 0.5), 0.2)
+			o.call("take_damage", 18.0 * _dmg_mult(), en.global_position)
+			o.call("apply_element", "divin")
+	en.call("apply_element", el)
 
 
 ## Appelé par les ennemis.

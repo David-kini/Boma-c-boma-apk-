@@ -17,7 +17,7 @@ const ELEMENTS: Dictionary = {
 	"vide": {"core": Color(0.75, 0.45, 1.0), "glow": Color(0.45, 0.10, 0.90, 0.32), "arc": Color(0.85, 0.6, 1.0)},
 	"poison": {"core": Color(0.60, 1.0, 0.45), "glow": Color(0.20, 0.85, 0.15, 0.30), "arc": Color(0.7, 1.0, 0.5)},
 	"solaire": {"core": Color(1.0, 0.75, 0.30), "glow": Color(1.0, 0.45, 0.05, 0.32), "arc": Color(1.0, 0.85, 0.4)},
-	"ombre": {"core": Color(0.95, 0.20, 0.25), "glow": Color(0.40, 0.0, 0.05, 0.40), "arc": Color(1.0, 0.3, 0.3)},
+	"ombre": {"core": Color(0.07, 0.02, 0.06), "glow": Color(0.75, 0.0, 0.08, 0.45), "arc": Color(1.0, 0.15, 0.2)},
 }
 
 @export var element: String = "eclair"

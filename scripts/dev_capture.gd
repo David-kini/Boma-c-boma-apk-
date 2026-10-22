@@ -123,12 +123,15 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	autoattack = args.has("autoattack")
 	report = args.has("report")
 	dragon_mode = String(args.get("dragon", ""))
+	statut = String(args.get("statut", ""))
 	if dragon_mode != "":
 		player.set("story", ["intro_vue", "dragon_eveille"])
 
 
 var autoattack: bool = false
 var dragon_mode: String = ""
+var statut: String = ""
+var _test_en: Node3D = null
 var shoot_at: int = -1
 var powers_menu_at: int = -1
 var tp_hold: bool = false
@@ -168,6 +171,19 @@ func _process(delta: float) -> void:
 		GameInput.shoot_buffer = 0.2
 	if _n == tp_at:
 		GameInput.tp_buffer = 0.2
+	if statut != "" and _n == 5:
+		# test des pouvoirs d'épée : un squelette devant le héros, puis le statut demandé
+		var sp2: Node = player.get("world").get_node("Ennemis")
+		var pos2: Vector3 = player.global_position + Vector3(0.0, 0.0, -3.0)
+		_test_en = sp2.call("_make", ["Skeleton_Warrior", Vector2(pos2.x, pos2.z), 400.0, 8.0, 3.3, 1.3, "Test"])
+		sp2.add_child(_test_en)
+	if statut != "" and _n == 12 and _test_en != null:
+		_test_en.set("detect_radius", 0.5)
+		_test_en.call("apply_element", statut)
+	if statut != "" and _n >= 12 and _n % 6 == 0 and _test_en != null and is_instance_valid(_test_en):
+		print("BILAN statut ", statut, " n=", _n, " hp=", int(_test_en.get("hp")), " etat=", _test_en.get("state"),
+			" gel=", _test_en.call("has_status", "gel"), " para=", _test_en.call("has_status", "para"),
+			" feu=", _test_en.call("has_status", "feu"), " actifs=", get_tree().get_nodes_in_group("enemies").size())
 	if dragon_mode != "" and _n == 3:
 		# boss final : le fait apparaître tout de suite dans le mode demandé (tour, perche, pique)
 		var sp: Node = player.get("world").get_node("Ennemis")

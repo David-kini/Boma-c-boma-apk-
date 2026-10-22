@@ -256,6 +256,8 @@ func _physics_process(delta: float) -> void:
 		if _ap != null and _ap.is_playing():
 			_ap.pause()
 		return
+	if state != "dead" and _status_tick(delta):
+		return
 	if _ap != null and not _ap.is_playing() and state != "dead":
 		_ap.play()
 	if state == "launched":
@@ -402,8 +404,162 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 0.0
 
 
-## Appelé par l'épée du joueur.
-func take_damage(amount: float, from_pos: Vector3) -> void:
+
+# ================================================================ pouvoirs des épées (statuts)
+## gel : immobile dans un bloc de glace ; para : paralysé par l'éclair ; feu / poison : dégâts
+## dans le temps, les flammes restent sur le corps. Les boss subissent des durées réduites.
+var _st: Dictionary = {}
+var _st_fx: Dictionary = {}
+var _immune: float = 0.0
+var _dot_t: float = 0.0
+var _spark_t: float = 0.0
+
+
+func has_status(k: String) -> bool:
+	return _st.has(k)
+
+
+func apply_element(el: String) -> void:
+	if state == "dead" or illusion:
+		return
+	match el:
+		"glace":
+			_set_status("gel", 2.2)
+		"eclair":
+			_set_status("para", 1.8)
+		"feu", "solaire":
+			_set_status("feu", 5.0)
+		"poison", "ombre":
+			_set_status("poison", 6.0)
+		"vide":
+			launch(7.0)
+		"divin":
+			_set_status("para", 1.4)
+			_set_status("feu", 4.0)
+
+
+func _set_status(k: String, dur: float) -> void:
+	if (k == "gel" or k == "para") and (_immune > 0.0 or _st.has("gel") or _st.has("para")):
+		return
+	if is_boss:
+		dur *= 0.35
+	_st[k] = dur
+	var pos: Vector3 = global_position + Vector3(0.0, 1.0 * model_scale / 1.3, 0.0)
+	var sc: float = model_scale / 1.3
+	if not _st_fx.has(k):
+		var fx: Node3D = Node3D.new()
+		add_child(fx)
+		_st_fx[k] = fx
+		match k:
+			"gel":
+				var mi: MeshInstance3D = MeshInstance3D.new()
+				var bm: BoxMesh = BoxMesh.new()
+				bm.size = Vector3(1.1, 2.0, 1.1) * sc
+				mi.mesh = bm
+				var m: StandardMaterial3D = StandardMaterial3D.new()
+				m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				m.albedo_color = Color(0.6, 0.9, 1.0, 0.55)
+				m.emission_enabled = true
+				m.emission = Color(0.3, 0.7, 1.0)
+				m.emission_energy_multiplier = 0.6
+				mi.material_override = m
+				mi.position = Vector3(0.0, 0.95 * sc, 0.0)
+				fx.add_child(mi)
+				CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.2, 0.0), Color(0.6, 0.9, 1.0), 2.0, 0.3)
+				Sfx.play("teleport", 1.8)
+			"feu", "poison":
+				var col: Color = Color(1.0, 0.45, 0.1) if k == "feu" else Color(0.45, 1.0, 0.25)
+				for i in range(5):
+					var f: MeshInstance3D = MeshInstance3D.new()
+					var sm: SphereMesh = SphereMesh.new()
+					sm.radius = 0.17 * sc
+					sm.height = 0.5 * sc
+					sm.radial_segments = 6
+					sm.rings = 3
+					f.mesh = sm
+					f.material_override = CombatFx._unshaded(col)
+					var a: float = float(i) / 5.0 * TAU
+					f.position = Vector3(cos(a) * 0.32 * sc, (0.35 + 0.28 * i) * sc, sin(a) * 0.32 * sc)
+					fx.add_child(f)
+			"para":
+				CombatFx.spark(get_parent(), pos, Color(0.8, 0.9, 1.0), 1.4)
+				Sfx.play("lightning", 1.2)
+	if k == "para":
+		CombatFx.bolt(get_parent(), pos + Vector3(0.0, 2.5, 0.0), pos, Color(0.8, 0.9, 1.0), 0.18)
+
+
+func _clear_status() -> void:
+	for k in _st_fx:
+		if is_instance_valid(_st_fx[k]):
+			(_st_fx[k] as Node).queue_free()
+	_st_fx.clear()
+	_st.clear()
+
+
+## Avance les statuts. Renvoie true si l'ennemi est bloqué (gel / paralysie).
+func _status_tick(delta: float) -> bool:
+	_immune = maxf(_immune - delta, 0.0)
+	if _st.is_empty():
+		return false
+	var locked: bool = false
+	var sc: float = model_scale / 1.3
+	for k in _st.keys():
+		_st[k] = float(_st[k]) - delta
+		if float(_st[k]) <= 0.0:
+			_st.erase(k)
+			if _st_fx.has(k):
+				if k == "gel":
+					CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.0 * sc, 0.0), Color(0.8, 0.95, 1.0), 1.3)
+					Sfx.play("hit", 1.4)
+				if is_instance_valid(_st_fx[k]):
+					(_st_fx[k] as Node).queue_free()
+				_st_fx.erase(k)
+			if k == "gel" or k == "para":
+				_immune = 0.9
+				if _ap != null and state != "dead":
+					_ap.play()
+	if _st.has("gel") or _st.has("para"):
+		locked = true
+	# flammes qui vacillent sur le corps
+	for k in ["feu", "poison"]:
+		if _st_fx.has(k) and is_instance_valid(_st_fx[k]):
+			var fx: Node3D = _st_fx[k]
+			for i in range(fx.get_child_count()):
+				var c: Node3D = fx.get_child(i)
+				var w: float = 0.8 + 0.5 * sin(Time.get_ticks_msec() * 0.016 + float(i) * 1.7)
+				c.scale = Vector3(w, 0.8 + w, w)
+	if _st.has("feu") or _st.has("poison"):
+		_dot_t -= delta
+		if _dot_t <= 0.0:
+			_dot_t = 0.5
+			var dmg: float = 0.0
+			if _st.has("feu"):
+				dmg += 5.0 if not is_boss else 8.0
+			if _st.has("poison"):
+				dmg += 4.0 if not is_boss else 6.0
+			take_damage(dmg, global_position, true)
+			if state == "dead":
+				return false
+	if _st.has("para"):
+		_spark_t -= delta
+		if _spark_t <= 0.0:
+			_spark_t = 0.22
+			var a: float = randf() * TAU
+			CombatFx.spark(get_parent(), global_position + Vector3(cos(a) * 0.5 * sc, randf_range(0.2, 1.8) * sc, sin(a) * 0.5 * sc), Color(0.8, 0.9, 1.0), 0.6)
+	if locked:
+		if _ap != null:
+			_ap.pause()
+		if not is_on_floor() and not flying:
+			velocity.y -= GRAVITY * delta
+		velocity.x = 0.0
+		velocity.z = 0.0
+		move_and_slide()
+	return locked
+
+
+
+## Appelé par l'épée du joueur. dot = dégâts dans le temps (brûlure, poison) : sans recul ni étincelle.
+func take_damage(amount: float, from_pos: Vector3, dot: bool = false) -> void:
 	if state == "dead":
 		return
 	if illusion:
@@ -414,10 +570,18 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 		return
 	hp -= amount
 	var head: Vector3 = global_position + Vector3(0.0, 1.5 * model_scale / 1.3, 0.0)
-	CombatFx.spark(get_parent(), head + Vector3(0.0, -0.3, 0.0), Color(0.45, 0.75, 1.0), 0.9)
-	CombatFx.number(get_parent(), head + Vector3(0.0, 0.5, 0.0), int(round(amount)))
+	if dot:
+		CombatFx.number(get_parent(), head + Vector3(0.0, 0.5, 0.0), int(round(amount)), Color(1.0, 0.55, 0.15))
+	else:
+		CombatFx.spark(get_parent(), head + Vector3(0.0, -0.3, 0.0), Color(0.45, 0.75, 1.0), 0.9)
+		CombatFx.number(get_parent(), head + Vector3(0.0, 0.5, 0.0), int(round(amount)))
 	_update_bar()
+	if hp > 0.0 and dot:
+		if is_boss:
+			_check_phase()
+		return
 	if hp <= 0.0:
+		_clear_status()
 		state = "dead"
 		_t = 0.0
 		_cur_anim = ""
@@ -452,9 +616,10 @@ func take_damage(amount: float, from_pos: Vector3) -> void:
 	_play("Hit_A", 0.05)
 	var push: Vector3 = global_position - from_pos
 	push.y = 0.0
-	var knock: Vector3 = push.normalized() * 5.0
+	var knock: Vector3 = push.normalized() * 9.0
 	velocity.x = knock.x
 	velocity.z = knock.z
+	velocity.y = 3.5      # petit saut : l'ennemi est propulsé en arrière
 
 
 ## Recul puissant (fin de combo).

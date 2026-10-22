@@ -7,6 +7,8 @@ const Overlay = preload("res://scripts/hud_overlay.gd")
 
 var player: Node3D = null
 var world: Node3D = null
+const Radar = preload("res://scripts/radar.gd")
+var radar: Control
 var zone_label: Label
 var info_label: Label
 var help_label: Label
@@ -26,6 +28,7 @@ var lvl_label: Label
 var power_label: Label
 var wings_button: Button
 var weapon_button: Button
+var weapon_desc: Label
 var coat_button: Button
 var potion_button: Button
 var inv_label: Label
@@ -51,6 +54,7 @@ var _tick: float = 0.0
 
 func setup(p: Node3D, w: Node3D) -> void:
 	player = p
+	radar.player = p
 	world = w
 	p.connect("hp_changed", _on_hp)
 	p.connect("energy_changed", _on_energy)
@@ -153,6 +157,9 @@ func _ready() -> void:
 	help_label.visible = not DisplayServer.is_touchscreen_available()
 	help_label.text = "ZQSD bouger · Maj courir · Espace sauter · C esquiver · J/clic : attaquer (5 coups) · F voler · T Transformation · G pouvoir · P choix du pouvoir · V téléport (maintenir = ciblage) · U attaque finale · R arme · H potion · Échap : menu"
 	_build_boss_bar()
+	radar = Radar.new()
+	radar.name = "Radar"
+	add_child(radar)
 	zone_banner = Label.new()
 	zone_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	zone_banner.offset_top = 95.0
@@ -285,6 +292,7 @@ func _build_powers() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	powers_panel.add_child(center)
 	var panel: PanelContainer = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _solid_style())
 	center.add_child(panel)
 	var margin: MarginContainer = MarginContainer.new()
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -310,7 +318,7 @@ func _build_powers() -> void:
 		b.custom_minimum_size = Vector2(360.0, 62.0)
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 13)
+		b.add_theme_font_size_override("font_size", 15)
 		b.text = "%s\n%s\nPortée %s · durée %s · recharge %s s" % [d["name"], d["desc"], d["range"], d["time"], str(d["cd"])]
 		b.pressed.connect(_on_power_chosen.bind(i))
 		grid.add_child(b)
@@ -322,6 +330,16 @@ func _build_powers() -> void:
 	close.add_theme_font_size_override("font_size", 18)
 	close.pressed.connect(close_powers)
 	vb.add_child(close)
+
+
+## Fond sombre opaque et bordure dorée pour les menus (texte toujours lisible).
+func _solid_style() -> StyleBoxFlat:
+	var sb: StyleBoxFlat = StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.05, 0.10, 0.96)
+	sb.border_color = Color(0.9, 0.75, 0.3)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	return sb
 
 
 func open_powers() -> void:
@@ -518,17 +536,24 @@ func _build_settings() -> void:
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
 	center.offset_left = -440.0
+	center.offset_top = 6.0
+	center.offset_bottom = -6.0
 	settings.add_child(center)
 
 	var panel: PanelContainer = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _solid_style())
 	center.add_child(panel)
 	var margin: MarginContainer = MarginContainer.new()
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		margin.add_theme_constant_override(side, 12)
 	panel.add_child(margin)
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(400.0, minf(620.0, get_viewport().get_visible_rect().size.y - 40.0))
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 5)
-	margin.add_child(vb)
+	scroll.add_child(vb)
 
 	var title: Label = Label.new()
 	title.text = "MENU / PAUSE"
@@ -588,6 +613,14 @@ func _build_settings() -> void:
 	weapon_button.add_theme_font_size_override("font_size", 20)
 	weapon_button.pressed.connect(_on_weapon_button)
 	vb.add_child(weapon_button)
+	weapon_desc = Label.new()
+	weapon_desc.custom_minimum_size = Vector2(380.0, 60.0)
+	weapon_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	weapon_desc.add_theme_font_size_override("font_size", 18)
+	weapon_desc.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	weapon_desc.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	weapon_desc.add_theme_constant_override("outline_size", 6)
+	vb.add_child(weapon_desc)
 	var camfx: Button = Button.new()
 	camfx.custom_minimum_size = Vector2(380.0, 36.0)
 	camfx.add_theme_font_size_override("font_size", 17)
@@ -667,6 +700,7 @@ func _refresh_settings() -> void:
 		var Weapons: GDScript = load("res://scripts/weapons.gd")
 		var d: Dictionary = Weapons.call("get_def", int(player.get("weapon_index")))
 		weapon_button.text = "Arme : " + String(d["name"]) + "  (Niv. %d)" % int(player.get("level"))
+		weapon_desc.text = "Dégâts x%.2f · Pouvoir : %s" % [float(d["dmg"]), String(d.get("power", ""))]
 		coat_button.text = "Manteau : " + String(player.get("coat_name"))
 		potion_button.text = "Potion (%d) · Or %d" % [int(player.get("potions")), int(player.get("gold"))]
 	for i in range(quality_buttons.size()):
@@ -720,6 +754,9 @@ func _process(delta: float) -> void:
 		if _title_t <= 0.0:
 			cine_title_l.text = ""
 			cine_sub_l.text = ""
+	radar.set_process(not cine_root.visible and not title_screen.visible)
+	if cine_root.visible or title_screen.visible:
+		radar.visible = false
 	if cine_root.visible:
 		return
 	if GameInput.powers_menu_buffer > 0.0:

@@ -123,8 +123,65 @@ func setup(w: Node3D) -> void:
 		["Skeleton_Minion", Vector2(-28.0, 82.0), 30.0, 5.0, 3.4, 1.2, "Squelette égaré"],
 	]
 	slots = plan
-	for i in range(slots.size()):
-		_spawn(i)
+	_add_packs()
+	# les ennemis ne sont plus tous créés au départ : ils apparaissent par zone autour du joueur
+	# (voir _process) et disparaissent quand on s'éloigne. Le monde reste léger.
+
+
+# ================================================================ meutes supplémentaires
+## Beaucoup plus d'ennemis : des meutes réparties dans toutes les zones (hors village et arène).
+const PACK_TYPES: Dictionary = {
+	"min": ["Skeleton_Minion", 40.0, 6.0, 3.8, 1.2, "Squelette"],
+	"rog": ["Skeleton_Rogue", 45.0, 7.0, 4.2, 1.25, "Squelette voleur"],
+	"war": ["Skeleton_Warrior", 60.0, 8.0, 3.3, 1.3, "Squelette guerrier"],
+	"mag": ["Skeleton_Mage", 50.0, 10.0, 3.0, 1.3, "Squelette mage"],
+	"bar": ["", 160.0, 16.0, 2.9, 1.25, "Barbare", "BARBARE"],
+	"sor": ["", 50.0, 10.0, 3.0, 1.2, "Sorcier", "SORCIER"],
+	"ass": ["", 55.0, 7.0, 5.6, 1.15, "Assassin", "ASSASSIN"],
+	"spe": ["", 45.0, 7.0, 5.0, 1.15, "Spectre ailé", "SPECTRE"],
+}
+## [zone ou "peaks", rayon min, rayon max, types...]
+const PACKS: Array = [
+	["plaine", 10.0, 60.0, "min", "min", "rog", "war", "min", "rog"],
+	["monstres", 8.0, 55.0, "war", "min", "rog", "mag", "min", "war", "bar", "mag"],
+	["ruines", 8.0, 50.0, "min", "war", "mag", "rog", "min", "war"],
+	["boss", 14.0, 60.0, "war", "war", "mag", "bar", "rog", "war"],
+	["volcan", 10.0, 60.0, "bar", "sor", "bar", "sor", "spe", "bar"],
+	["foret", 8.0, 55.0, "ass", "ass", "rog", "ass", "mag", "spe"],
+	["rochers", 8.0, 55.0, "sor", "bar", "sor", "war", "rog", "sor"],
+	["pins", 10.0, 60.0, "rog", "ass", "war", "ass", "rog", "min"],
+	["bois_sombre", 8.0, 50.0, "mag", "sor", "min", "mag", "rog", "spe"],
+	["peaks", 8.0, 55.0, "bar", "sor", "bar", "spe", "war", "bar"],
+	["lac", 30.0, 70.0, "min", "rog", "min", "war"],
+	["village", 55.0, 85.0, "min", "rog", "war", "min"],
+	["arene", 75.0, 110.0, "min", "war", "rog", "min", "war", "mag"],
+]
+
+
+func _add_packs() -> void:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = 20260
+	for pk in PACKS:
+		var key: String = String(pk[0])
+		var center: Vector2 = WorldData.PEAKS_CENTER if key == "peaks" else WorldData.ZONES[key]["center"]
+		for rep in range(2):           # chaque ligne de la liste est jouée 2 fois
+			for ti in range(3, pk.size()):
+				var tp: Array = PACK_TYPES[String(pk[ti])]
+				var a: float = rng.randf() * TAU
+				var r: float = rng.randf_range(float(pk[1]), float(pk[2]))
+				var pos: Vector2 = center + Vector2(cos(a), sin(a)) * r
+				if pos.distance_to(WorldData.VILLAGE) < 45.0 or pos.length() < 34.0:
+					continue
+				if absf(pos.x) > WorldData.HALF - 25.0 or absf(pos.y) > WorldData.HALF - 25.0:
+					continue
+				var row: Array = [tp[0], pos, tp[1], tp[2], tp[3], tp[4], tp[5]]
+				if tp.size() > 6:
+					row.append((_type_opts()[String(tp[6])] as Dictionary).duplicate())
+				slots.append(row)
+
+
+func _type_opts() -> Dictionary:
+	return {"ASSASSIN": ASSASSIN, "BARBARE": BARBARE, "SORCIER": SORCIER, "SPECTRE": SPECTRE}
 
 
 func _spawn(i: int) -> void:
@@ -157,26 +214,80 @@ func _make(s: Array) -> CharacterBody3D:
 	return e
 
 
+## Chargement par zone : un ennemi n'existe que s'il est à moins de LOAD_DIST du joueur
+## (les boss : un peu plus loin). Au-delà de UNLOAD_DIST il est retiré. Le nombre d'ennemis
+## actifs est plafonné selon la qualité graphique (téléphones faibles).
+const LOAD_DIST: float = 105.0
+const UNLOAD_DIST: float = 150.0
+const MAX_ACTIVE: Array = [18, 26, 40, 60]
+var _unloaded: Dictionary = {}     # indices retirés par éloignement (pas tués)
+
+
+func _is_boss_slot(i: int) -> bool:
+	return slots[i].size() > 7 and bool((slots[i][7] as Dictionary).get("is_boss", false))
+
+
 func _process(delta: float) -> void:
 	_waves_process(delta)
 	_check -= delta
 	if _check > 0.0:
 		return
-	_check = 1.0
+	_check = 0.7
 	var players: Array = get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		return
 	var pp: Vector3 = (players[0] as Node3D).global_position
+	var pp2: Vector2 = Vector2(pp.x, pp.z)
 	_dragon_check(players[0] as Node3D)
+	var active: int = 0
+	var want: Array = []              # [distance, indice] à créer
 	for i in range(slots.size()):
-		if _alive.has(i) and is_instance_valid(_alive[i]):
-			continue
-		_alive.erase(i)
-		_dead_t[i] = float(_dead_t.get(i, 0.0)) + 1.0
 		var sp: Vector2 = slots[i][1]
-		var wait: float = BOSS_RESPAWN if slots[i].size() > 7 and bool((slots[i][7] as Dictionary).get("is_boss", false)) else RESPAWN_TIME
-		if float(_dead_t[i]) >= wait and Vector2(pp.x, pp.z).distance_to(sp) > 35.0:
-			_spawn(i)
+		var d: float = pp2.distance_to(sp)
+		var boss: bool = _is_boss_slot(i)
+		if _alive.has(i):
+			if is_instance_valid(_alive[i]):
+				var en: Node3D = _alive[i]
+				var dd: float = pp2.distance_to(Vector2(en.global_position.x, en.global_position.z))
+				var busy: bool = String(en.get("state")) != "idle" and String(en.get("state")) != "dead"
+				if dd > UNLOAD_DIST * (1.6 if boss else 1.0) and not busy:
+					en.queue_free()
+					_alive.erase(i)
+					_unloaded[i] = true
+				else:
+					active += 1
+				continue
+			_alive.erase(i)           # tué
+			_unloaded.erase(i)
+			_dead_t[i] = 0.0
+		if _unloaded.has(i):
+			if d < LOAD_DIST * (1.3 if boss else 1.0):
+				want.append([d, i])
+			continue
+		if not _dead_t.has(i):
+			_unloaded[i] = true       # jamais créé
+			if d < LOAD_DIST * (1.3 if boss else 1.0):
+				want.append([d, i])
+			continue
+		_dead_t[i] = float(_dead_t[i]) + _check
+		var wait: float = BOSS_RESPAWN if boss else RESPAWN_TIME
+		if float(_dead_t[i]) >= wait and d > 35.0:
+			_dead_t.erase(i)
+			_unloaded[i] = true
+	want.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var cap: int = int(MAX_ACTIVE[clampi(GameSettings.quality, 0, 3)])
+	var made: int = 0
+	for w in want:
+		var i2: int = int(w[1])
+		if made >= 4:
+			break
+		if active >= cap and not _is_boss_slot(i2):
+			break
+		if _unloaded.has(i2) and float(w[0]) > 28.0:      # jamais devant le nez du joueur
+			_unloaded.erase(i2)
+			_spawn(i2)
+			active += 1
+			made += 1
 
 
 # ================================================================ défi de l'arène (vagues)

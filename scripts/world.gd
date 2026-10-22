@@ -26,7 +26,11 @@ func _ready() -> void:
 	_build_environment()
 	_build_boundary_walls()
 	var lm: RefCounted = Landmarks.new()
+	var before: Array = get_children()
 	lm.call("build", self, data)
+	for c in get_children():
+		if not before.has(c) and c is Node3D:
+			_zones.append(_zone_info(c as Node3D))
 	var spawner: Node3D = EnemySpawner.new()
 	spawner.name = "Ennemis"
 	add_child(spawner)
@@ -55,6 +59,44 @@ func flash(strength: float) -> void:
 func _process(delta: float) -> void:
 	if follow != null:
 		terrain.call("update", follow.global_position, delta)
+		_zone_t -= delta
+		if _zone_t <= 0.0:
+			_zone_t = 0.5
+			_zone_cull(follow.global_position)
+
+
+## Chargement par zone : chaque lieu construit (village, ruines, volcan...) n'est affiché et
+## animé que lorsque le joueur est assez près. Le reste du monde dort.
+var _zones: Array = []           # [noeud, AABB]
+var _zone_t: float = 0.0
+
+
+func _zone_info(n: Node3D) -> Array:
+	var box: AABB = AABB()
+	var first: bool = true
+	for ch in n.get_children():
+		if ch is MeshInstance3D:
+			var b: AABB = (ch as MeshInstance3D).get_aabb()
+			b.position += (ch as MeshInstance3D).position
+			box = b if first else box.merge(b)
+			first = false
+		elif ch is Node3D and not (ch is StaticBody3D):
+			var q: AABB = AABB((ch as Node3D).position - Vector3(3, 3, 3), Vector3(6, 6, 6))
+			box = q if first else box.merge(q)
+			first = false
+	return [n, box if not first else AABB(Vector3(-1e5, -1e5, -1e5), Vector3.ONE * 2e5)]
+
+
+func _zone_cull(p: Vector3) -> void:
+	var lim: float = GameSettings.view_distance() + 80.0
+	for z in _zones:
+		var n: Node3D = z[0]
+		var box: AABB = z[1]
+		var q: Vector3 = Vector3(clampf(p.x, box.position.x, box.end.x), 0.0, clampf(p.z, box.position.z, box.end.z))
+		var near: bool = Vector2(p.x - q.x, p.z - q.z).length() < lim
+		if near != n.visible:
+			n.visible = near
+			n.process_mode = Node.PROCESS_MODE_INHERIT if near else Node.PROCESS_MODE_DISABLED
 
 
 func spawn_point() -> Vector3:

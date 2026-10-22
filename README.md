@@ -179,3 +179,9 @@ Code écrit sans pouvoir l'exécuter dans Godot : seule la syntaxe (gdparse) et 
 Corps en formes simples, esquive = pose accroupie (pas de roulade), perfs sur Tecno Pop 7 non mesurées.
 Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
 `legacy_2d/` = ancien prototype 2D (exclu de l'export).
+
+## v0.17 (non compilée, en attente de l'ordre « compiler »)
+- **Radar** rond en haut à droite (ennemis en rouge, boss en orange) + **flèche vers le prochain boss** avec la distance.
+- **Chargement par zone** : les ennemis n'existent que dans un rayon de 105 m autour du joueur (plafond selon la qualité), les lieux lointains sont endormis. Beaucoup plus d'ennemis (meutes dans toutes les zones).
+- **Pouvoirs d'épée à chaque coup** : glace = gèle, éclair = paralyse (tonnerre), feu = brûlure dont les flammes restent sur le corps, poison, vide = projection en l'air, Épée du Démon (noire) = vol de vie, Épée Divine = foudre qui saute sur 2 ennemis. Les coups repoussent plus fort les ennemis.
+- Menu : fond sombre lisible, pouvoir de l'arme affiché, défilement.
