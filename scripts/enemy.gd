@@ -413,6 +413,7 @@ var _st_fx: Dictionary = {}
 var _immune: float = 0.0
 var _dot_t: float = 0.0
 var _spark_t: float = 0.0
+var _poison_stacks: int = 0
 
 
 func has_status(k: String) -> bool:
@@ -443,6 +444,9 @@ func _set_status(k: String, dur: float) -> void:
 		return
 	if is_boss:
 		dur *= 0.35
+	if k == "poison":
+		# chaque blessure empoisonnée s'ajoute : le venin ronge de plus en plus vite
+		_poison_stacks = mini(_poison_stacks + 1, 6)
 	_st[k] = dur
 	var pos: Vector3 = global_position + Vector3(0.0, 1.0 * model_scale / 1.3, 0.0)
 	var sc: float = model_scale / 1.3
@@ -507,6 +511,8 @@ func _status_tick(delta: float) -> bool:
 		_st[k] = float(_st[k]) - delta
 		if float(_st[k]) <= 0.0:
 			_st.erase(k)
+			if k == "poison":
+				_poison_stacks = 0
 			if _st_fx.has(k):
 				if k == "gel":
 					CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.0 * sc, 0.0), Color(0.8, 0.95, 1.0), 1.3)
@@ -536,7 +542,7 @@ func _status_tick(delta: float) -> bool:
 			if _st.has("feu"):
 				dmg += 5.0 if not is_boss else 8.0
 			if _st.has("poison"):
-				dmg += 4.0 if not is_boss else 6.0
+				dmg += (3.0 if not is_boss else 4.0) * float(maxi(_poison_stacks, 1))
 			take_damage(dmg, global_position, true)
 			if state == "dead":
 				return false

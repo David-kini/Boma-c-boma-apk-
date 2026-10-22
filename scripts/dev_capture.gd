@@ -107,6 +107,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	if args.has("fly"):
 		GameInput.fly_buffer = 1.0
 	_div_req = args.has("divine")
+	_bow_req = args.has("bow")
 	if args.has("menu"):
 		_open_menu_at = 25
 	shoot_at = int(args.get("shoot", "-1"))
@@ -131,6 +132,7 @@ var autoattack: bool = false
 var dragon_mode: String = ""
 var statut: String = ""
 var _div_req: bool = false
+var _bow_req: bool = false
 var cine_skip: int = -1
 var _test_en: Node3D = null
 var shoot_at: int = -1
@@ -225,6 +227,8 @@ func _process(delta: float) -> void:
 		dm.set("target", _test_en)
 		dm.set("start_pos", player.global_position + Vector3(0.0, 1.5, 0.0))
 		player.get_parent().add_child(dm)
+	if _bow_req and _n == 4:
+		player.call("set_bow", true)
 	if _div_req and _n == 4:
 		player.set("energy", float(player.get("max_energy")))
 		GameInput.divine_buffer = 0.5

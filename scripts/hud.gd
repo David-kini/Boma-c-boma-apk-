@@ -29,6 +29,7 @@ var power_label: Label
 var wings_button: Button
 var weapon_button: Button
 var weapon_desc: Label
+var bow_button: Button
 var coat_button: Button
 var potion_button: Button
 var inv_label: Label
@@ -621,6 +622,14 @@ func _build_settings() -> void:
 	weapon_desc.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	weapon_desc.add_theme_constant_override("outline_size", 6)
 	vb.add_child(weapon_desc)
+	bow_button = Button.new()
+	bow_button.custom_minimum_size = Vector2(380.0, 40.0)
+	bow_button.add_theme_font_size_override("font_size", 20)
+	bow_button.pressed.connect(func() -> void:
+		player.call("set_bow", not bool(player.get("bow_mode")))
+		player.set("_bow_auto", false)
+		_refresh_settings())
+	vb.add_child(bow_button)
 	var camfx: Button = Button.new()
 	camfx.custom_minimum_size = Vector2(380.0, 36.0)
 	camfx.add_theme_font_size_override("font_size", 17)
@@ -700,6 +709,7 @@ func _refresh_settings() -> void:
 		var Weapons: GDScript = load("res://scripts/weapons.gd")
 		var d: Dictionary = Weapons.call("get_def", int(player.get("weapon_index")))
 		weapon_button.text = "Arme : " + String(d["name"]) + "  (Niv. %d)" % int(player.get("level"))
+		bow_button.text = "Mode : " + ("ARC (touche B)" if bool(player.get("bow_mode")) else "ÉPÉE (touche B pour l'arc)")
 		weapon_desc.text = "Dégâts x%.2f · Pouvoir : %s" % [float(d["dmg"]), String(d.get("power", ""))]
 		coat_button.text = "Manteau : " + String(player.get("coat_name"))
 		potion_button.text = "Potion (%d) · Or %d" % [int(player.get("potions")), int(player.get("gold"))]

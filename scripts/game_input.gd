@@ -13,6 +13,7 @@ var dodge_buffer: float = 0.0
 var attack_buffer: float = 0.0
 var fly_buffer: float = 0.0       # bouton VOL / touche F
 var divine_buffer: float = 0.0    # bouton DIVIN / touche T
+var bow_buffer: float = 0.0       # touche B : épée <-> arc
 var weapon_buffer: float = 0.0    # bouton ARME / touche R
 var heal_buffer: float = 0.0      # bouton SOIN / touche H
 var shoot_buffer: float = 0.0     # bouton POUVOIR / touche G : pouvoir sélectionné
@@ -35,6 +36,7 @@ func _process(delta: float) -> void:
 	fly_buffer = maxf(fly_buffer - delta, 0.0)
 	divine_buffer = maxf(divine_buffer - delta, 0.0)
 	weapon_buffer = maxf(weapon_buffer - delta, 0.0)
+	bow_buffer = maxf(bow_buffer - delta, 0.0)
 	heal_buffer = maxf(heal_buffer - delta, 0.0)
 	shoot_buffer = maxf(shoot_buffer - delta, 0.0)
 	tp_buffer = maxf(tp_buffer - delta, 0.0)
@@ -61,6 +63,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				divine_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_R:
 				weapon_buffer = BUFFER_TIME
+			elif ke.physical_keycode == KEY_B:
+				bow_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_H:
 				heal_buffer = BUFFER_TIME
 			elif ke.physical_keycode == KEY_G:

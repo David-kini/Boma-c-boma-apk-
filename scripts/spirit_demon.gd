@@ -89,9 +89,9 @@ func _process(delta: float) -> void:
 	_wl.rotation.z = 1.9 + fl
 	_wr.rotation.z = -1.9 - fl
 	var tp: Vector3 = target.global_position if target != null and is_instance_valid(target) else global_position
-	if _t < 0.45:
+	if _t < 0.3:
 		# il surgit en grandissant puis fonce sur l'ennemi
-		var k: float = _t / 0.45
+		var k: float = _t / 0.3
 		scale = Vector3.ONE * lerpf(0.2, 1.4, smoothstep(0.0, 1.0, k))
 		global_position = _start.lerp(tp + Vector3(0.0, 0.2, 0.0) - (tp - _start).normalized() * 1.2, smoothstep(0.0, 1.0, k))
 		_face(tp)
@@ -106,13 +106,13 @@ func _process(delta: float) -> void:
 			CombatFx.spark(get_parent(), tp + Vector3(0.0, 1.0, 0.0), Color(0.9, 0.1, 0.2), 1.6)
 			CombatFx.ring(get_parent(), tp + Vector3(0.0, 0.3, 0.0), Color(0.8, 0.05, 0.15, 0.8), 3.0, 0.3)
 			Sfx.play("hit", 0.7)
-	elif _t > 0.9:
+	elif _t > 0.5:
 		# se dissipe en montant
-		var f: float = clampf((_t - 0.9) / 0.6, 0.0, 1.0)
+		var f: float = clampf((_t - 0.5) / 0.5, 0.0, 1.0)
 		global_position.y += delta * 2.5
 		for m in _mats:
 			var c: Color = (m as StandardMaterial3D).albedo_color
-			c.a *= (1.0 - f * 0.25)
+			c.a *= (1.0 - f * 0.3)
 			(m as StandardMaterial3D).albedo_color = c
 		scale = Vector3.ONE * (1.4 + f * 0.6)
 		if f >= 1.0:

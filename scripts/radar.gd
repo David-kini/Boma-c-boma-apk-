@@ -13,6 +13,7 @@ const BOSSES: Array = [
 	["boss_reine", "Reine de la forêt", "foret", Vector2(0.0, 12.0)],
 	["boss_gardien", "Gardien des montagnes", "peaks", Vector2(5.0, 14.0)],
 	["boss_nuages", "Seigneur des nuages", "peaks", Vector2(-10.0, -40.0)],
+	["boss_dragon", "Dragon des royaumes", "arene", Vector2(0.0, 0.0)],
 ]
 
 var player: Node3D = null
@@ -37,22 +38,21 @@ func boss_pos(i: int) -> Vector2:
 	return base + (b[3] as Vector2)
 
 
-## Boss non vaincu le plus proche : [indice, distance] ou [-1, 0].
+## Boss du niveau en cours : [indice, distance] ou [-1, 0]. Un seul boss à la fois :
+## niveau 1 = Roi Squelette ... niveau 6 = Dragon.
 func nearest_boss() -> Array:
 	if player == null:
 		return [-1, 0.0]
-	var st: Array = player.get("story")
+	var stage: int = int(player.call("stage_index"))
+	var stages: Array = player.get("STAGES")
+	if stage >= stages.size():
+		return [-1, 0.0]
+	var kind: String = "boss_" + String(stages[stage]["kind"])
 	var pp: Vector2 = Vector2(player.global_position.x, player.global_position.z)
-	var best: int = -1
-	var bd: float = 1e9
 	for i in range(BOSSES.size()):
-		if st.has(String(BOSSES[i][0])):
-			continue
-		var d: float = pp.distance_to(boss_pos(i))
-		if d < bd:
-			bd = d
-			best = i
-	return [best, bd]
+		if String(BOSSES[i][0]) == kind:
+			return [i, pp.distance_to(boss_pos(i))]
+	return [-1, 0.0]
 
 
 func _process(delta: float) -> void:
@@ -93,7 +93,7 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -6), c + Vector2(5, 5), c + Vector2(-5, 5)]), Color(0.4, 1.0, 0.6))
 	# flèche vers le boss à vaincre
 	var nb: Array = nearest_boss()
-	var txt: String = "Tous les boss vaincus"
+	var txt: String = "Tous les niveaux terminés"
 	if int(nb[0]) >= 0:
 		var tgt: Vector2 = boss_pos(int(nb[0]))
 		var dv: Vector2 = tgt - pp
@@ -106,5 +106,5 @@ func _draw() -> void:
 			draw_colored_polygon(PackedVector2Array([tip + s2 * 4.0, tip - s2 * 12.0 + side * 9.0, tip - s2 * 12.0 - side * 9.0]), col)
 		else:
 			draw_circle(tip, 6.0, col)
-		txt = "%s  %d m" % [String(BOSSES[int(nb[0])][1]), int(dist)]
+		txt = "Niv.%d : %s  %d m" % [int(player.call("stage_index")) + 1, String(BOSSES[int(nb[0])][1]), int(dist)]
 	draw_string(_font, Vector2(-40.0, R * 2.0 + 22.0), txt, HORIZONTAL_ALIGNMENT_RIGHT, R * 2.0 + 44.0, 12, Color(1.0, 0.9, 0.5))

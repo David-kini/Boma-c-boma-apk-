@@ -87,6 +87,8 @@ func _process(delta: float) -> void:
 			CombatFx.spark(get_parent(), global_position, color, 0.9)
 			if shooter != null:
 				shooter.call("on_ranged_hit")
+				if shooter.has_method("apply_power"):
+					shooter.call("apply_power", en)
 			if _hit.size() >= 3:
 				queue_free()
 				return

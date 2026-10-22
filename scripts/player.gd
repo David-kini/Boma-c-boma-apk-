@@ -22,6 +22,7 @@ const CombatFx = preload("res://scripts/combat_fx.gd")
 const Wings = preload("res://scripts/wings.gd")
 const DivineAura = preload("res://scripts/divine_aura.gd")
 const SpiritDemon = preload("res://scripts/spirit_demon.gd")
+const Bow = preload("res://scripts/bow.gd")
 const Weapons = preload("res://scripts/weapons.gd")
 const SaveGame = preload("res://scripts/save_game.gd")
 const PlayerShot = preload("res://scripts/player_shot.gd")
@@ -334,8 +335,20 @@ func _physics_process(delta: float) -> void:
 			_respawn()
 		return
 
+	# bascule épée / arc (touche B, bouton du menu)
+	if GameInput.bow_buffer > 0.0:
+		GameInput.bow_buffer = 0.0
+		_bow_auto = false
+		set_bow(not bow_mode)
+		announce.emit("ARC : " + String(Weapons.get_def(weapon_index)["name"]) if bow_mode else "Retour à l'épée")
+	# mode arc : chaque attaque tire une flèche d'énergie qui garde le pouvoir de l'arme
+	if bow_mode and (GameInput.attack_buffer > 0.0 or GameInput.attack_held()) and _dodge_t <= 0.0 and _hurt_t <= 0.0 and _shot_cd <= 0.0 and action == "":
+		GameInput.consume_attack()
+		_shoot()
+		_shot_cd = 0.28 if not is_divine else 0.18
+		return
 	# attaque (combo)
-	if GameInput.attack_buffer > 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
+	if not bow_mode and GameInput.attack_buffer > 0.0 and _dodge_t <= 0.0 and _hurt_t <= 0.0:
 		if _atk_i < 0 and not _plunge:
 			GameInput.consume_attack()
 			_push_input("A")
@@ -853,6 +866,7 @@ func _update_powers(delta: float) -> void:
 		_tech_cd[k] = float(_tech_cd[k]) - delta
 	power_cd = maxf(power_cd - delta, 0.0)
 	_demon_spirit(delta)
+	_update_hot(delta)
 	for wk in _wear.keys():
 		_wear[wk] = maxf(float(_wear[wk]) - delta * 1.2, 0.0)
 	if _tp_window > 0.0:
@@ -1096,31 +1110,68 @@ func _demon_spirit(delta: float) -> void:
 ## Une épée trop utilisée surchauffe : après WEAR_MAX coups elle est remplacée automatiquement
 ## par la suivante débloquée. L'usure de toutes les armes redescend avec le temps.
 const WEAR_MAX: float = 30.0
+const HOT_TIME: float = 14.0
 var _wear: Dictionary = {}
+var _hot: Dictionary = {}          # arme -> secondes de refroidissement restantes
+var bow_mode: bool = false         # l'épée est devenue un arc (garde son pouvoir)
+var _bow_auto: bool = false
 
 
 func _weapon_wear(hits: int) -> void:
-	if is_divine:
+	if is_divine or bow_mode:
 		return
 	_wear[weapon_index] = float(_wear.get(weapon_index, 0.0)) + float(hits)
 	var w: float = float(_wear[weapon_index])
 	if w >= WEAR_MAX:
 		_wear[weapon_index] = 0.0
+		_hot[weapon_index] = HOT_TIME
 		var old: int = weapon_index
 		cycle_weapon()
 		if weapon_index != old:
 			announce.emit("%s surchauffe → %s" % [String(Weapons.get_def(old)["name"]), String(Weapons.get_def(weapon_index)["name"])])
+		else:
+			# toutes les épées sont chaudes : l'arme actuelle devient un arc
+			_bow_auto = true
+			set_bow(true)
+			announce.emit("Toutes les épées surchauffent : ARC %s" % String(Weapons.get_def(weapon_index)["name"]))
 	elif w >= WEAR_MAX * 0.8 and int(w) % 2 == 0:
 		announce.emit("%s chauffe..." % String(Weapons.get_def(weapon_index)["name"]))
+
+
+func _update_hot(delta: float) -> void:
+	for k in _hot.keys():
+		_hot[k] = float(_hot[k]) - delta
+		if float(_hot[k]) <= 0.0:
+			_hot.erase(k)
+	if bow_mode and _bow_auto and not _hot.has(weapon_index):
+		_bow_auto = false
+		set_bow(false)
+		announce.emit("%s refroidie : retour à l'épée" % String(Weapons.get_def(weapon_index)["name"]))
+
+
+## L'épée devient un arc (même élément, même pouvoir) ou redevient une épée.
+func set_bow(on: bool) -> void:
+	bow_mode = on
+	if on:
+		var d: Dictionary = Weapons.get_def(weapon_index)
+		var b: Node3D = Bow.new()
+		b.name = "Arme"
+		b.set("element", String(d["element"]))
+		rig.call("equip_weapon", b)
+		_set_layer(b, 2)
+	else:
+		_equip_weapon(weapon_index, is_divine)
 
 
 func cycle_weapon() -> void:
 	var n: int = Weapons.count()
 	for step in range(1, n + 1):
 		var j: int = (weapon_index + step) % n
-		if int(Weapons.get_def(j)["level"]) <= level:
+		if int(Weapons.get_def(j)["level"]) <= level and not _hot.has(j):
 			if j != weapon_index:
 				_equip_weapon(j, is_divine)
+				if bow_mode:
+					set_bow(true)
 				announce.emit(String(Weapons.get_def(j)["name"]))
 				save_progress()
 			return
@@ -1321,6 +1372,11 @@ func _shoot() -> void:
 	_pose_dur = 0.32
 	_pose_t = _pose_dur
 	Sfx.play("shoot")
+
+
+## Appelé par une flèche / vague d'énergie : applique le pouvoir de l'arme à l'ennemi touché.
+func apply_power(en: Node3D) -> void:
+	_apply_sword_power(en)
 
 
 ## Appelé par la vague d'énergie quand elle touche.
@@ -2472,6 +2528,27 @@ func bosses_count() -> int:
 	return n
 
 
+# ---------------------------------------------------------------- niveaux (un boss par niveau)
+## Niveau 1 : Roi Squelette (repaire), 2 : Seigneur des ombres (bois sombre), 3 : Reine de la forêt,
+## 4 : Gardien des montagnes (pics), 5 : Seigneur des nuages (ciel), 6 : Dragon des royaumes (arène).
+const STAGES: Array = [
+	{"kind": "roi", "name": "Roi Squelette", "terrain": "Repaire du boss"},
+	{"kind": "ombre", "name": "Seigneur des ombres", "terrain": "Bois sombre"},
+	{"kind": "reine", "name": "Reine de la forêt", "terrain": "Forêt fantastique"},
+	{"kind": "gardien", "name": "Gardien des montagnes", "terrain": "Pics enneigés"},
+	{"kind": "nuages", "name": "Seigneur des nuages", "terrain": "Ciel des pics"},
+	{"kind": "dragon", "name": "Dragon des royaumes", "terrain": "Grande Arène"},
+]
+
+
+## Niveau actuel (0 = premier boss) : le premier boss de la liste pas encore vaincu.
+func stage_index() -> int:
+	for i in range(STAGES.size()):
+		if not story.has("boss_" + String(STAGES[i]["kind"])):
+			return i
+	return STAGES.size()
+
+
 ## Appelé à la mort d'un boss : après les 5 boss de région, le Dragon des royaumes
 ## apparaît au-dessus de la Grande Arène ; sa défaite débloque et lance la fin.
 func boss_defeated(kind: String) -> void:
@@ -2488,6 +2565,11 @@ func boss_defeated(kind: String) -> void:
 					c.call("play_ending"))
 		return
 	announce.emit("Boss vaincus : %d / 5" % bosses_count())
+	var ns: int = stage_index()
+	if ns < STAGES.size() - 1:
+		var t3: SceneTreeTimer = get_tree().create_timer(2.5)
+		t3.timeout.connect(func() -> void:
+			announce.emit("NIVEAU %d : %s (%s)" % [ns + 1, String(STAGES[ns]["name"]), String(STAGES[ns]["terrain"])]))
 	if bosses_count() >= ALL_BOSSES.size() and not story.has("dragon_eveille"):
 		mark_story("dragon_eveille")
 		var t2: SceneTreeTimer = get_tree().create_timer(3.0)

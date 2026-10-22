@@ -187,6 +187,11 @@ func _type_opts() -> Dictionary:
 func _spawn(i: int) -> void:
 	var e: CharacterBody3D = _make(slots[i])
 	e.name = "Ennemi_%d" % i
+	if not _is_boss_slot(i):
+		# plus on avance dans les niveaux, plus les ennemis sont résistants
+		var pls: Array = get_tree().get_nodes_in_group("player")
+		if not pls.is_empty():
+			e.set("max_hp", float(e.get("max_hp")) * (1.0 + 0.12 * float(pls[0].call("stage_index"))))
 	add_child(e)
 	_alive[i] = e
 	_dead_t.erase(i)
@@ -223,6 +228,25 @@ const MAX_ACTIVE: Array = [18, 26, 40, 60]
 var _unloaded: Dictionary = {}     # indices retirés par éloignement (pas tués)
 
 
+## Boss d'un emplacement : vaincu ou pas encore au programme (niveau suivant) = absent.
+func _boss_kind(i: int) -> String:
+	var o: Dictionary = slots[i][7]
+	var k: String = String(o.get("boss_kind", ""))
+	return k if k != "" else "roi"
+
+
+func _boss_blocked(i: int, pl: Node3D) -> bool:
+	var kind: String = _boss_kind(i)
+	if (pl.get("story") as Array).has("boss_" + kind):
+		return true
+	var stages: Array = pl.get("STAGES")
+	var cur: int = int(pl.call("stage_index"))
+	for k in range(stages.size()):
+		if String(stages[k]["kind"]) == kind:
+			return k > cur
+	return false
+
+
 func _is_boss_slot(i: int) -> bool:
 	return slots[i].size() > 7 and bool((slots[i][7] as Dictionary).get("is_boss", false))
 
@@ -245,6 +269,8 @@ func _process(delta: float) -> void:
 		var sp: Vector2 = slots[i][1]
 		var d: float = pp2.distance_to(sp)
 		var boss: bool = _is_boss_slot(i)
+		if boss and not _alive.has(i) and _boss_blocked(i, players[0] as Node3D):
+			continue
 		if _alive.has(i):
 			if is_instance_valid(_alive[i]):
 				var en: Node3D = _alive[i]
