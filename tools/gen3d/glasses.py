@@ -83,7 +83,7 @@ def tube(name, a, b, r, m, seg=8):
 def build_glasses():
     gold = mat("Monture_or", (1.0, 0.72, 0.30), metal=1.0, rough=0.25)
     wood = mat("Branche_bois", (0.45, 0.10, 0.05), metal=0.0, rough=0.45)
-    glass = mat("Verres_violets", (0.36, 0.22, 0.44), metal=0.0, rough=0.05, alpha=0.62)
+    glass = mat("Verres_violets", (0.12, 0.05, 0.18), metal=0.0, rough=0.35, alpha=0.80)
     parts = []
     for side in (-1, 1):
         ln = make_lens(side)

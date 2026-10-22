@@ -458,11 +458,20 @@ if KIND == "tete":
     top = fv["rgb"][y0b:y0b + int((y1b - y0b) * 0.07), x0b:x1b + 1]
     tm = fv["mask"][y0b:y0b + int((y1b - y0b) * 0.07), x0b:x1b + 1]
     hair = np.median(top[tm], axis=0) if tm.sum() > 20 else np.array([0.85, 0.72, 0.5])
+    # mieux : la couleur réellement photographiée sur le haut et l'arrière du crâne (côtés)
+    ytop_ = P[:, 1].max()
+    zc_ = np.median(P[:, 2])
+    back_top = have & (P[:, 1] > ytop_ - (ytop_ - P[:, 1].min()) * 0.30) & (P[:, 2] < zc_)
+    if back_top.sum() > 200:
+        hair = np.median(col[back_top], axis=0)
     REPORT["couleur_cheveux"] = [round(float(c), 3) for c in hair]
     rng = np.random.default_rng(3)
     grain = cv2.GaussianBlur(rng.normal(0, 1, (TEX, TEX)).astype(np.float32), (0, 0), 1.2)[:, :, None]
     hair_tex = np.clip(hair[None, None, :] * (1 + 0.10 * grain), 0, 1)
-    um = cv2.GaussianBlur((~seen).astype(np.float32), (0, 0), 8)[:, :, None]
+    # seules les zones non vues reçoivent la couleur des cheveux (fondu à l'intérieur de ces zones,
+    # sur 12 texels) : les zones photographiées restent intactes
+    dist_in = ndimage.distance_transform_edt(~seen)
+    um = np.clip(dist_in / 12.0, 0, 1)[:, :, None]
     tex = tex * (1 - um) + hair_tex * um
 tex = np.clip(tex, 0, 1)
 tex_img = Image.fromarray((tex * 255).astype(np.uint8))
@@ -473,7 +482,7 @@ glow = ((hsv[:, :, 0] > 95) & (hsv[:, :, 0] < 135) & (hsv[:, :, 1] > 90) & (hsv[
 glow = cv2.GaussianBlur(glow, (5, 5), 0)[:, :, None]
 # + un peu de l'image elle-même : la texture vient de photos déjà éclairées, elle ne doit
 #   pas devenir toute noire côté ombre (le dos et le manteau noir restent lisibles)
-emi = np.clip(tex * (0.28 + 0.72 * glow), 0, 1)
+emi = np.clip(tex * ((0.28 if KIND != "tete" else 0.10) + 0.72 * glow), 0, 1)
 emi_img = Image.fromarray((emi * 255).astype(np.uint8))
 emi_img.save(os.path.join(OUT, NAME + "_lueur.png"))
 REPORT["lueur_pct"] = round(float(glow.mean() * 100), 2)

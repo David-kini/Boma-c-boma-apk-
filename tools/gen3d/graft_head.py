@@ -132,13 +132,38 @@ zn = ztop - TOP_TO_NECK
 REPORT["tete_hauteur_m"] = round(ztop - min(v.z for v in vs), 3)
 REPORT["tete_largeur_m"] = round(max(v.x for v in vs) - min(v.x for v in vs), 3)
 
+# le col du manteau qui passe DEVANT la nouvelle tête (menton, joues) est retiré ; le col
+# qui encadre la tête sur les côtés et derrière est gardé
+import numpy as np  # noqa: E402
+hv = np.array([[v.x, v.y, v.z] for v in vs])
+bm = bmesh.new()
+bm.from_mesh(body.data)
+kill = []
+for v in bm.verts:
+    if v.co.z < zn - 0.01:
+        continue
+    sl = hv[np.abs(hv[:, 2] - v.co.z) < 0.012]
+    if len(sl) < 10:
+        continue
+    x0_, x1_ = sl[:, 0].min() - 0.015, sl[:, 0].max() + 0.015
+    ymid = np.median(sl[:, 1])
+    if x0_ < v.co.x < x1_ and v.co.y < ymid:          # devant le milieu de la tête
+        kill.append(v)
+REPORT["sommets_col_devant_visage_supprimes"] = len(kill)
+bmesh.ops.delete(bm, geom=kill, context="VERTS")
+bm.to_mesh(body.data)
+bm.free()
+body.data.update()
+
 # ---------------------------------------------------------------- 3. lunettes
-# hauteur des yeux d'après la photo de face : centre des lunettes à 37 % sommet -> cou
-zg = ztop - 0.373 * TOP_TO_NECK
+# hauteur des yeux d'après la photo de face : centre des lunettes à 45 % sommet -> cou
+zg = ztop - 0.50 * TOP_TO_NECK
 band = [v for v in vs if abs(v.z - zg) < 0.008]
 cx = (max(v.x for v in band) + min(v.x for v in band)) / 2
-head_w = max(v.x for v in band) - min(v.x for v in band)
 front = min(v.y for v in band if abs(v.x - cx) < 0.02)          # arête du nez entre les yeux
+# largeur du visage (sans les oreilles) : points du devant de la tête seulement
+face_pts = [v for v in band if v.y < front + 0.07]
+head_w = max(v.x for v in face_pts) - min(v.x for v in face_pts)
 g = glasses.build_glasses()
 sg = (head_w + 0.014) / 0.165
 g.scale = (sg, sg, sg)

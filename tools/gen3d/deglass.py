@@ -85,6 +85,18 @@ for name, z in ZONES.items():
         cv2.fillPoly(frame, [np.array(p, np.int32)], 255)
     edge = cv2.morphologyEx(lens.astype(np.uint8) * 255, cv2.MORPH_GRADIENT, np.ones((5, 5), np.uint8))
     frame = cv2.bitwise_or(frame, edge)
+    # branche en bois rouge et pièces dorées : détectées par la couleur, dans la bande des
+    # lunettes seulement (les lèvres, plus bas, ne sont pas touchées)
+    hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV).astype(int)
+    hh, ss, vv = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    wood = ((hh <= 12) | (hh >= 168)) & (ss > 150) & (vv > 35) & (vv < 170)
+    gold = (hh >= 15) & (hh <= 30) & (ss > 160) & (vv > 140)
+    y_band = np.zeros(im.shape[:2], bool)
+    ys_ = [p_[1] for poly in z["verres"] for p_ in poly]
+    y_band[max(0, min(ys_) - 45):max(ys_) - 20] = True
+    col_m = ((wood | gold) & y_band).astype(np.uint8) * 255
+    col_m = cv2.dilate(col_m, np.ones((7, 7), np.uint8))
+    frame = cv2.bitwise_or(frame, col_m)
     res = cv2.inpaint(blend, frame, 6, cv2.INPAINT_TELEA)
     cv2.imwrite(os.path.join(OUT, name.replace(".png", "_sans_lunettes.png")), res)
     print("OK", name)
