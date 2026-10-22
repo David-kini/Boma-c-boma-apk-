@@ -51,8 +51,11 @@ CFG = {
     # la tête seule, à partir des gros plans (bien plus de détails sur le visage)
     "tete": ("tencent/Hunyuan3D-2", "hunyuan3d-dit-v2-0", 40, 5.5),
     "tete_mv": ("tencent/Hunyuan3D-2mv", "hunyuan3d-dit-v2-mv", 40, 5.5),
+    # la tête à partir de TES VRAIES PHOTOS (lunettes retirées par deglass.py)
+    "photo": ("tencent/Hunyuan3D-2", "hunyuan3d-dit-v2-0", 40, 5.5),
+    "photo_mv": ("tencent/Hunyuan3D-2mv", "hunyuan3d-dit-v2-mv", 40, 5.5),
 }
-OCTREE = 384 if MODE.startswith("tete") else 256
+OCTREE = 384 if MODE.startswith(("tete", "photo")) else 256
 repo, sub, steps, guid = CFG[MODE]
 log("chargement", repo, sub)
 pipe = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(repo, subfolder=sub, device="cpu", dtype=torch.float32)
@@ -64,6 +67,12 @@ elif MODE == "tete":
     image = prep("tete_avant.png")
 elif MODE == "tete_mv":
     image = {"front": prep("tete_avant.png"), "back": prep("tete_dos.png")}
+elif MODE == "photo":
+    image = prep("photo_face_sans_lunettes.png")
+elif MODE == "photo_mv":
+    # un seul profil photographié : l'autre côté est son miroir (visage presque symétrique)
+    image = {"front": prep("photo_face_sans_lunettes.png"), "left": prep("photo_gauche_sans_lunettes.png"),
+             "right": prep("photo_profil_miroir_sans_lunettes.png")}
 elif MODE == "epee":
     image = prep("epee_avant.png")
 elif MODE == "epee_mv":
