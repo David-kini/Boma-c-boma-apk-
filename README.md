@@ -195,3 +195,4 @@ Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
 - **Poison** cumulatif (jusqu'à 6 charges) ; démon des ailes visible ~1 s.
 - **Lame du Vent** (épée ou arc) : élément vent, chaque coup/flèche fait valser l'ennemi en l'air en tournoyant (les ennemis voisins aussi), avec anneaux de vent. Forme divine : Seigneur des tempêtes.
 - **Seigneur des tempêtes** (forme divine de la Lame du Vent) : dure 1 minute, aspire tous les ennemis à moins de 22 m qui tournoient en l'air autour du héros.
+- La durée des pouvoirs (gel, paralysie, feu, poison, vent) et des formes divines augmente avec le niveau : +8 % par niveau (jusqu'à x3), affichée dans le menu.

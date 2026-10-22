@@ -710,7 +710,7 @@ func _refresh_settings() -> void:
 		var d: Dictionary = Weapons.call("get_def", int(player.get("weapon_index")))
 		weapon_button.text = "Arme : " + String(d["name"]) + "  (Niv. %d)" % int(player.get("level"))
 		bow_button.text = "Mode : " + ("ARC (touche B)" if bool(player.get("bow_mode")) else "ÉPÉE (touche B pour l'arc)")
-		weapon_desc.text = "Dégâts x%.2f · Pouvoir : %s" % [float(d["dmg"]), String(d.get("power", ""))]
+		weapon_desc.text = "Dégâts x%.2f · Durée des pouvoirs x%.2f (niveau %d)\nPouvoir : %s" % [float(d["dmg"]), float(player.call("duration_mult")), int(player.get("level")), String(d.get("power", ""))]
 		coat_button.text = "Manteau : " + String(player.get("coat_name"))
 		potion_button.text = "Potion (%d) · Or %d" % [int(player.get("potions")), int(player.get("gold"))]
 	for i in range(quality_buttons.size()):

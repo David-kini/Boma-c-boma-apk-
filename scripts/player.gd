@@ -993,6 +993,12 @@ var _giant_target: float = 1.0
 var _form_pulse: float = 0.0
 
 
+## La durée des pouvoirs (gel, paralysie, brûlure, poison, vent) et des formes divines
+## augmente avec le niveau : +8 % par niveau, jusqu'à ×3.
+func duration_mult() -> float:
+	return clampf(1.0 + 0.08 * float(level - 1), 1.0, 3.0)
+
+
 func _form_element() -> String:
 	return String(Weapons.get_def(weapon_index)["element"])
 
@@ -1050,7 +1056,7 @@ func _start_giant() -> void:
 
 func _start_divine() -> void:
 	is_divine = true
-	divine_total = float(_form().get("time", DIVINE_TIME))
+	divine_total = float(_form().get("time", DIVINE_TIME)) * duration_mult()
 	divine_left = divine_total
 	aura.call("set_active", true)
 	_equip_weapon(weapon_index, true)

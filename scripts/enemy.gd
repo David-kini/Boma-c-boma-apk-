@@ -455,6 +455,8 @@ func _set_status(k: String, dur: float) -> void:
 		return
 	if is_boss:
 		dur *= 0.35
+	if player != null and player.has_method("duration_mult"):
+		dur *= float(player.call("duration_mult"))
 	if k == "poison":
 		# chaque blessure empoisonnée s'ajoute : le venin ronge de plus en plus vite
 		_poison_stacks = mini(_poison_stacks + 1, 6)
