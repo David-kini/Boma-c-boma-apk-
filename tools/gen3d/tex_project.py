@@ -125,6 +125,13 @@ elif KIND == "tete":
 else:
     views = {"face": load_view("epee_avant.png"), "gauche": load_view("epee_cote.png"), "dos": load_view("epee_dos.png")}
 views = {k: vv for k, vv in views.items() if vv is not None}
+# repères mesurés à la main sur les photos (pixels) : oreille, pointe du nez, sommet du crâne
+LANDMARKS = {
+    "photo_gauche_sans_lunettes.png": {"oreille": (505, 330), "nez": (33, 415), "sommet": 72},
+}
+if "gauche" in views:
+    _w = views["gauche"]["mask"].shape[1]
+    LANDMARKS["photo_profil_miroir_sans_lunettes.png"] = {"oreille": (_w - 1 - 505, 330), "nez": (_w - 1 - 33, 415), "sommet": 72}
 if KIND == "tete" and "face" in views:
     # peau homogène : les profils prennent la luminosité et la teinte moyennes de la photo de face
     ref = cv2.cvtColor((views["face"]["rgb"] * 255).astype(np.uint8), cv2.COLOR_RGB2LAB).astype(np.float32)
@@ -310,8 +317,47 @@ def project_view(key, weight, rgb=None, region=None):
     cols = np.nonzero(rows)[1]
     cxi = float(np.median(cols)) if len(cols) > 10 else (x0b + x1b) / 2
 
+    ox, oy = 0.0, 0.0
+    if KIND == "tete" and key != "face" and vw["name"] in LANDMARKS:
+        # profils : la photo est un 3/4 (environ 50-70°) et son cadrage diffère. On aligne par
+        # repères : centre de l'oreille et sommet du crâne (position), pointe du nez (angle).
+        lm = LANDMARKS[vw["name"]]
+        side = 1.0 if YAW[key] > 0 else -1.0
+        hgt = V[:, 1].max() - V[:, 1].min()
+        ytop = V[:, 1].max()
+        # oreille du modèle : points les plus à l'extérieur, à mi-hauteur de la tête, côté visible
+        band_ = (V[:, 1] < ytop - hgt * 0.30) & (V[:, 1] > ytop - hgt * 0.62)
+        ears = []
+        for sgn in (-1.0, 1.0):
+            xs_ = V[band_, 0] * sgn
+            ears.append(V[band_][xs_ > np.percentile(xs_, 97)].mean(0))
+        nose = V[np.argmax(V[:, 2])]
+        best_ = None
+        for ya in range(30, 101, 2):
+            Rr = roty(side * ya)
+            ear = max(ears, key=lambda e_: (Rr @ e_)[2])       # l'oreille tournée vers l'appareil
+            e2, n2 = Rr @ ear, Rr @ nose
+            kk = (lm["oreille"][1] - lm["sommet"]) / (ytop - e2[1])
+            err = abs((n2[0] - e2[0]) * kk - (lm["nez"][0] - lm["oreille"][0])) + abs((e2[1] - n2[1]) * kk - (lm["nez"][1] - lm["oreille"][1]))
+            if best_ is None or err < best_[0]:
+                best_ = (err, ya, kk, ear)
+        _, ya, kk, ear = best_
+        YAW[key] = side * ya
+        R = roty(YAW[key])
+        pv = V @ R.T
+        pt = P @ R.T
+        nt = NN @ R.T
+        e2 = R @ ear
+        my1 = pv[:, 1].max()
+        k = kk
+        cxm, cxi = 0.0, 0.0
+        y0b = lm["sommet"]
+        ox = lm["oreille"][0] - e2[0] * k
+        oy = 0.0
+        REPORT.setdefault("alignement", {})[key] = {"angle": int(YAW[key]), "erreur_px": round(float(best_[0]), 1)}
+
     def to_px(q):
-        return np.stack([(q[:, 0] - cxm) * k + cxi, (my1 - q[:, 1]) * k + y0b], 1)
+        return np.stack([(q[:, 0] - cxm) * k + cxi + ox, (my1 - q[:, 1]) * k + y0b + oy], 1)
 
     tri = to_px(pv.reshape(-1, 3))[F]
     _, _, zb = raster(tri, W, H, depth=pv[:, 2][F])

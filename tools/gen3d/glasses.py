@@ -131,7 +131,10 @@ def build_glasses():
     bpy.ops.object.join()
     g = bpy.context.active_object
     g.name = "Lunettes"
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    # origine = centre du pont (sinon elle resterait sur le premier verre et décalerait tout)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
+    bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
     return g
 
 
