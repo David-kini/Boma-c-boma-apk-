@@ -185,3 +185,6 @@ Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
 - **Chargement par zone** : les ennemis n'existent que dans un rayon de 105 m autour du joueur (plafond selon la qualité), les lieux lointains sont endormis. Beaucoup plus d'ennemis (meutes dans toutes les zones).
 - **Pouvoirs d'épée à chaque coup** : glace = gèle, éclair = paralyse (tonnerre), feu = brûlure dont les flammes restent sur le corps, poison, vide = projection en l'air, Épée du Démon (noire) = vol de vie, Épée Divine = foudre qui saute sur 2 ennemis. Les coups repoussent plus fort les ennemis.
 - Menu : fond sombre lisible, pouvoir de l'arme affiché, défilement.
+- Surchauffe : une épée utilisée 30 coups d'affilée est remplacée automatiquement par la suivante débloquée.
+- Attaque spéciale au ralenti : au 5e coup du combo près d'un ennemi, il est projeté dans le ciel, le héros le rejoint, le frappe 5 fois en vol puis redescend (onde de choc).
+- Correctifs : remise à zéro complète du héros après la scène d'intro (plus de pose assise), fermeture propre (bouton Retour sauvegarde et quitte, ralenti remis à 1).

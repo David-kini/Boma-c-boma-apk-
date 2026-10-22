@@ -124,6 +124,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 	report = args.has("report")
 	dragon_mode = String(args.get("dragon", ""))
 	statut = String(args.get("statut", ""))
+	cine_skip = int(args.get("cineskip", "-1"))
 	if dragon_mode != "":
 		player.set("story", ["intro_vue", "dragon_eveille"])
 
@@ -131,6 +132,7 @@ func setup(p: Node3D, c: Node3D, args: Dictionary) -> void:
 var autoattack: bool = false
 var dragon_mode: String = ""
 var statut: String = ""
+var cine_skip: int = -1
 var _test_en: Node3D = null
 var shoot_at: int = -1
 var powers_menu_at: int = -1
@@ -175,15 +177,15 @@ func _process(delta: float) -> void:
 		# test des pouvoirs d'épée : un squelette devant le héros, puis le statut demandé
 		var sp2: Node = player.get("world").get_node("Ennemis")
 		var pos2: Vector3 = player.global_position + Vector3(0.0, 0.0, -3.0)
-		_test_en = sp2.call("_make", ["Skeleton_Warrior", Vector2(pos2.x, pos2.z), 400.0, 8.0, 3.3, 1.3, "Test"])
+		_test_en = sp2.call("_make", ["Skeleton_Warrior", Vector2(pos2.x, pos2.z), 4000.0, 8.0, 3.3, 1.3, "Test"])
 		sp2.add_child(_test_en)
-	if statut != "" and _n == 12 and _test_en != null:
+	if statut != "" and _n == 12 and is_instance_valid(_test_en):
 		_test_en.set("detect_radius", 0.5)
 		_test_en.call("apply_element", statut)
-	if statut != "" and _n >= 12 and _n % 6 == 0 and _test_en != null and is_instance_valid(_test_en):
+	if statut != "" and _n >= 12 and _n % 6 == 0 and is_instance_valid(_test_en):
 		print("BILAN statut ", statut, " n=", _n, " hp=", int(_test_en.get("hp")), " etat=", _test_en.get("state"),
 			" gel=", _test_en.call("has_status", "gel"), " para=", _test_en.call("has_status", "para"),
-			" feu=", _test_en.call("has_status", "feu"), " actifs=", get_tree().get_nodes_in_group("enemies").size())
+			" feu=", _test_en.call("has_status", "feu"), " actifs=", get_tree().get_nodes_in_group("enemies").size(), " action=", player.get("action"), " py=", snappedf(player.global_position.y, 0.1), " ey=", snappedf(_test_en.global_position.y, 0.1))
 	if dragon_mode != "" and _n == 3:
 		# boss final : le fait apparaître tout de suite dans le mode demandé (tour, perche, pique)
 		var sp: Node = player.get("world").get_node("Ennemis")
@@ -217,6 +219,10 @@ func _process(delta: float) -> void:
 			var dd: Vector3 = dg2.global_position - player.global_position
 			if _n == frames - 1:
 				print("BILAN dragon pos=", dg2.global_position.snapped(Vector3.ONE), " mode=", dg2.get("_mode"), " d=", int(dd.length()))
+	if cine_skip > 0 and _n == cine_skip:
+		get_parent().get("cinematic").call("skip")
+	if cine_skip > 0 and _n > cine_skip and _n % 20 == 0:
+		print("BILAN skip n=", _n, " anim=", player.get("debug_anim"), " etat=", player.get("state"), " physique=", player.is_physics_processing(), " scale=", Engine.time_scale, " rigy=", snappedf((player.get("rig") as Node3D).position.y, 0.01), " pos=", player.global_position.snapped(Vector3(0.1, 0.1, 0.1)))
 	if cine != "" and _n == 3:
 		var c: Node = get_parent().get("cinematic")
 		c.call("play_intro" if cine == "intro" else "play_ending")

@@ -147,8 +147,7 @@ func _finish() -> void:
 		if is_instance_valid(n):
 			n.queue_free()
 	_temp.clear()
-	player.set("debug_anim", "")
-	player.set_physics_process(true)
+	_reset_hero()
 	var rig_cam: Camera3D = main.get("camera_rig").get("camera") as Camera3D
 	rig_cam.make_current()
 	main.get("camera_rig").global_position = player.global_position + Vector3(0.0, 1.5, 0.0)
@@ -166,6 +165,27 @@ func _finish() -> void:
 		player.call("mark_story", "intro_vue")
 	elif was == "fin":
 		player.call("mark_story", "fin_vue")
+
+
+## Remet le héros debout et jouable, quelle que soit la façon dont la scène s'est arrêtée
+## (fin normale ou bouton « Passer ») : plus de pose de méditation qui reste.
+func _reset_hero() -> void:
+	player.set("debug_anim", "")
+	player.set("state", "idle")
+	player.set("_pose_t", 0.0)
+	player.set("_atk_i", -1)
+	player.set("action", "")
+	player.set("invulnerable", false)
+	player.velocity = Vector3.ZERO
+	var rg: Node3D = player.get("rig") as Node3D
+	if rg != null:
+		rg.rotation = Vector3(0.0, float(player.get("face_yaw")), 0.0)
+		rg.position = Vector3.ZERO
+		rg.call("animate", 0.0, "idle", 0.0)
+	player.set_physics_process(true)
+	player.set_process(true)
+	Engine.time_scale = 1.0
+	get_tree().paused = false
 
 
 func skip() -> void:

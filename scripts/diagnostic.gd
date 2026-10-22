@@ -32,10 +32,28 @@ func _process(delta: float) -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_PREDELETE:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		# bouton Retour / fermeture : on sauvegarde puis on quitte proprement
+		_save_and_clean()
+		_write("FIN NORMALE")
+		get_tree().quit()
+	elif what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_PREDELETE:
+		_save_and_clean()
 		_write("FIN NORMALE")
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		# retour dans le jeu : ralenti remis à 1 et réglages graphiques réappliqués
+		Engine.time_scale = 1.0
+		GameSettings.call("_apply_engine")
 		_write("REPRISE")
+
+
+func _save_and_clean() -> void:
+	Engine.time_scale = 1.0
+	if not is_inside_tree():
+		return
+	var ps: Array = get_tree().get_nodes_in_group("player")
+	if not ps.is_empty() and ps[0].has_method("save_progress"):
+		ps[0].call("save_progress")
 
 
 func _write(state: String) -> void:

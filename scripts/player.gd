@@ -352,6 +352,9 @@ func _physics_process(delta: float) -> void:
 				return
 			elif not on_floor and not is_flying and global_position.y - _ground_h() > 2.5:
 				_start_plunge()
+			elif on_floor and not is_flying and _combo_next == 4 and _tech_ready("aerienne") and _ground_launch_target() != null:
+				_start_action("aerienne", {"target": _ground_launch_target()})
+				return
 			else:
 				_start_attack(_combo_next)
 		elif _atk_t > _dur(_atk_i) * 0.35:
@@ -598,6 +601,14 @@ func _update_timers(delta: float) -> void:
 		hp_changed.emit(hp, max_hp)
 
 
+## Ennemi normal tout proche (pas un boss, pas un volant) pour la projection vers le ciel.
+func _ground_launch_target() -> Node3D:
+	var t: Node3D = _nearest_enemy(6.0)
+	if t == null or bool(t.get("is_boss")) or bool(t.get("flying")) or not t.has_method("launch"):
+		return null
+	return t
+
+
 func _nearest_enemy(radius: float) -> Node3D:
 	var best: Node3D = null
 	var best_d: float = radius
@@ -681,7 +692,10 @@ func _process_attack(delta: float) -> void:
 		var nxt: int = (_atk_i + 1) % ATTACKS.size()
 		_end_attack()
 		if queued:
-			_start_attack(nxt)
+			if nxt == 4 and is_on_floor() and not is_flying and _tech_ready("aerienne") and _ground_launch_target() != null:
+				_start_action("aerienne", {"target": _ground_launch_target()})
+			else:
+				_start_attack(nxt)
 
 
 func _deal_hits(a: Dictionary) -> void:
@@ -723,6 +737,7 @@ func _deal_hits(a: Dictionary) -> void:
 		Sfx.play("hit")
 		combo_count += hits
 		_combo_timer = 2.2
+		_weapon_wear(hits)
 		combo_changed.emit(combo_count)
 		energy = minf(energy + 5.0 * float(hits), max_energy)
 		energy_changed.emit(energy, max_energy)
@@ -832,6 +847,8 @@ func _update_powers(delta: float) -> void:
 	for k in _tech_cd:
 		_tech_cd[k] = float(_tech_cd[k]) - delta
 	power_cd = maxf(power_cd - delta, 0.0)
+	for wk in _wear.keys():
+		_wear[wk] = maxf(float(_wear[wk]) - delta * 1.2, 0.0)
 	if _tp_window > 0.0:
 		_tp_window -= delta
 		if _tp_window <= 0.0:
@@ -972,6 +989,27 @@ func _equip_weapon(i: int, divine_look: bool) -> void:
 	sw.set("width_scale", float(d["width"]))
 	rig.call("equip_weapon", sw)
 	_set_layer(sw, 2)
+
+
+## Une épée trop utilisée surchauffe : après WEAR_MAX coups elle est remplacée automatiquement
+## par la suivante débloquée. L'usure de toutes les armes redescend avec le temps.
+const WEAR_MAX: float = 30.0
+var _wear: Dictionary = {}
+
+
+func _weapon_wear(hits: int) -> void:
+	if is_divine:
+		return
+	_wear[weapon_index] = float(_wear.get(weapon_index, 0.0)) + float(hits)
+	var w: float = float(_wear[weapon_index])
+	if w >= WEAR_MAX:
+		_wear[weapon_index] = 0.0
+		var old: int = weapon_index
+		cycle_weapon()
+		if weapon_index != old:
+			announce.emit("%s surchauffe → %s" % [String(Weapons.get_def(old)["name"]), String(Weapons.get_def(weapon_index)["name"])])
+	elif w >= WEAR_MAX * 0.8 and int(w) % 2 == 0:
+		announce.emit("%s chauffe..." % String(Weapons.get_def(weapon_index)["name"]))
 
 
 func cycle_weapon() -> void:
@@ -1981,7 +2019,8 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 				return
 			move_and_slide()
 		"aerienne":
-			# Exécution aérienne : frappe ascendante, 2 frappes en l'air, coup descendant
+			# Exécution aérienne (au ralenti) : l'ennemi est projeté vers le ciel, le héros le
+			# rejoint en volant, le frappe plusieurs fois en l'air, puis redescend d'un coup.
 			var tg4: Node3D = _act_target()
 			if GameInput.dodge_buffer > 0.0:
 				_end_action()
@@ -1994,45 +2033,59 @@ func _process_action(delta: float, on_floor: bool, wish: Vector3, has_input: boo
 				_set_pose(2, 0.35)
 				_strike(tg4, _tdmg("aerienne"), global_position, col)
 				if tg4 != null and is_instance_valid(tg4):
-					tg4.call("launch", 10.0)
-				velocity.y = 10.5
-				Sfx.play("swing", 0.9)
+					tg4.call("launch", 14.0)
+				velocity.y = 14.0
+				Sfx.play("swing", 0.7)
+				Sfx.play("teleport", 0.8)
+				CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.2, 0.0), col, 3.0, 0.3)
+				if cam != null:
+					cam.call("slow_mo", 0.9, 0.3)
+					cam.call("zoom_pulse", 0.85, 0.6)
 				_act["step"] = 1
-			elif step == 1 and t >= 0.42:
+			elif step == 1 and t >= 0.5:
 				if tg4 != null and is_instance_valid(tg4):
-					tg4.call("air_hold", 0.55)
-					# rejoint la cible en l'air
+					tg4.call("air_hold", 1.4)
+					# rejoint la cible dans le ciel
 					var side: Vector3 = (global_position - tg4.global_position)
 					side.y = 0.0
+					CombatFx.afterimage(get_parent(), global_position, col)
 					global_position = tg4.global_position + side.normalized() * 1.2
 					_face_to(tg4.global_position)
 				velocity.y = 0.0
 				_set_pose(0, 0.15)
 				_strike(tg4, _tdmg("aerienne"), global_position, col)
-				Sfx.play("swing", 1.2)
+				Sfx.play("swing", 1.1)
 				_act["step"] = 2
-			elif step == 2:
+			elif step >= 2 and step <= 5:
 				velocity.y = 0.0
-				if t >= 0.6:
-					_set_pose(1, 0.15)
+				if tg4 != null and is_instance_valid(tg4):
+					_face_to(tg4.global_position)
+				if t >= 0.5 + 0.18 * float(step - 1):
+					_set_pose(step % 2, 0.12)
 					_strike(tg4, _tdmg("aerienne"), global_position, col)
-					Sfx.play("swing", 1.3)
-					_act["step"] = 3
-			elif step == 3:
+					if tg4 != null and is_instance_valid(tg4):
+						CombatFx.afterimage(get_parent(), global_position, col)
+						CombatFx.bolt(get_parent(), global_position + Vector3(0.0, 1.0, 0.0), tg4.global_position + Vector3(0.0, 1.0, 0.0), col, 0.15)
+					Sfx.play("swing", 1.2 + 0.07 * float(step))
+					_act["step"] = step + 1
+			elif step == 6:
 				velocity.y = 0.0
-				if t >= 0.8:
+				if t >= 1.55:
 					_set_pose(4, 0.4)
-					_strike(tg4, _tdmg("aerienne") * 1.6, global_position, col)
+					_strike(tg4, _tdmg("aerienne") * 1.8, global_position, col)
 					if tg4 != null and is_instance_valid(tg4):
 						tg4.call("slam_down")
-					velocity.y = -18.0
-					_act["step"] = 4
-			elif step == 4:
-				velocity.y = -18.0
-				if is_on_floor() or t > 1.6:
-					_shockwave(global_position, 2.5, _tdmg("aerienne"), 0.0, col)
+					velocity.y = -20.0
+					Sfx.play("ulti_boom", 1.2)
 					if cam != null:
-						cam.call("shake", 0.35)
+						cam.call("slow_mo", 0.5, 0.2)
+					_act["step"] = 7
+			elif step == 7:
+				velocity.y = -20.0
+				if is_on_floor() or t > 2.6:
+					_shockwave(global_position, 3.5, _tdmg("aerienne"), 8.0, col)
+					if cam != null:
+						cam.call("shake", 0.5)
 					_end_action()
 					return
 			move_and_slide()
