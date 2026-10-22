@@ -37,9 +37,10 @@ def log(*a):
 
 SHAPE, INP, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 TARGET_FACES = int(sys.argv[4]) if len(sys.argv) > 4 else 24000
-KIND = sys.argv[5] if len(sys.argv) > 5 else ("epee" if "epee" in os.path.basename(SHAPE) else "hero")
-HEIGHT = 1.8 if KIND == "hero" else 1.25
-NAME = "MainHero" if KIND == "hero" else "HeroSword"
+_b = os.path.basename(SHAPE)
+KIND = sys.argv[5] if len(sys.argv) > 5 else ("epee" if "epee" in _b else ("tete" if ("photo" in _b or "tete" in _b) else "hero"))
+HEIGHT = {"hero": 1.8, "epee": 1.25, "tete": 0.3}[KIND]
+NAME = {"hero": "MainHero", "epee": "HeroSword", "tete": "HeroHead"}[KIND]
 TEX = int(os.environ.get("TEX", "2048"))
 os.makedirs(OUT, exist_ok=True)
 
@@ -117,9 +118,25 @@ if KIND == "hero":
         "dos": load_view("3_dos.png"),
         "droite": load_view("4_droite.png"),
     }
+elif KIND == "tete":
+    # vraies photos (lunettes retirées) ; l'autre profil est le miroir du profil photographié
+    views = {"face": load_view("photo_face_sans_lunettes.png"), "gauche": load_view("photo_gauche_sans_lunettes.png"),
+             "droite": load_view("photo_profil_miroir_sans_lunettes.png")}
 else:
     views = {"face": load_view("epee_avant.png"), "gauche": load_view("epee_cote.png"), "dos": load_view("epee_dos.png")}
 views = {k: vv for k, vv in views.items() if vv is not None}
+if KIND == "tete" and "face" in views:
+    # peau homogène : les profils prennent la luminosité et la teinte moyennes de la photo de face
+    ref = cv2.cvtColor((views["face"]["rgb"] * 255).astype(np.uint8), cv2.COLOR_RGB2LAB).astype(np.float32)
+    rm = views["face"]["mask"]
+    for k in ("gauche", "droite"):
+        if k not in views:
+            continue
+        lab = cv2.cvtColor((views[k]["rgb"] * 255).astype(np.uint8), cv2.COLOR_RGB2LAB).astype(np.float32)
+        mk = views[k]["mask"]
+        for c in range(3):
+            lab[:, :, c] = (lab[:, :, c] - lab[mk, c].mean()) / (lab[mk, c].std() + 1e-6) * ref[rm, c].std() + ref[rm, c].mean()
+        views[k]["rgb"] = cv2.cvtColor(np.clip(lab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2RGB).astype(np.float32) / 255.0
 log("vues chargées :", list(views))
 
 # ------------------------------------------------------------------ silhouettes et orientation
@@ -318,7 +335,7 @@ def project_view(key, weight, rgb=None, region=None):
     return to_px, ok
 
 
-WEIGHTS = {"face": 1.0, "dos": 1.0, "gauche": 0.6, "droite": 0.6}
+WEIGHTS = {"face": 1.0, "dos": 1.0, "gauche": 0.6, "droite": 0.6} if KIND != "tete" else {"face": 1.0, "gauche": 0.9, "droite": 0.9}
 for key in views:
     project_view(key, WEIGHTS[key])
 
@@ -326,7 +343,7 @@ for key in views:
 face_ok = False
 try:
     if KIND != "hero":
-        raise RuntimeError("pas de visage pour l'épée")
+        raise RuntimeError("pas de gros plan à ajouter")
     close = load_view("visage_avant.png", maxh=900)
     fr = views["face"]
     g_front = cv2.cvtColor((fr["rgb"] * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
@@ -387,6 +404,11 @@ log("texels vus : %.1f %%" % (100.0 * have.mean()))
 # zones jamais vues et marges entre îlots : couleur du texel vu le plus proche
 _, (iy, ix) = ndimage.distance_transform_edt(~seen, return_indices=True)
 tex = tex[iy, ix]
+if KIND == "tete":
+    # zones jamais photographiées (arrière du crâne) : couleur voisine adoucie, sans traînées
+    blur = cv2.GaussianBlur(tex, (0, 0), 6)
+    um = cv2.GaussianBlur((~seen).astype(np.float32), (0, 0), 3)[:, :, None]
+    tex = tex * (1 - um) + blur * um
 tex = np.clip(tex, 0, 1)
 tex_img = Image.fromarray((tex * 255).astype(np.uint8))
 tex_img.save(os.path.join(OUT, NAME + "_albedo.png"))
@@ -402,8 +424,8 @@ emi_img.save(os.path.join(OUT, NAME + "_lueur.png"))
 REPORT["lueur_pct"] = round(float(glow.mean() * 100), 2)
 
 # ------------------------------------------------------------------ export
-mat = trimesh.visual.material.PBRMaterial(name=NAME, baseColorTexture=tex_img, metallicFactor=0.15 if KIND == "hero" else 0.5,
-                                          roughnessFactor=0.65 if KIND == "hero" else 0.4,
+mat = trimesh.visual.material.PBRMaterial(name=NAME, baseColorTexture=tex_img, metallicFactor={"hero": 0.15, "epee": 0.5, "tete": 0.0}[KIND],
+                                          roughnessFactor={"hero": 0.65, "epee": 0.4, "tete": 0.6}[KIND],
                                           emissiveTexture=emi_img, emissiveFactor=[1.0, 1.0, 1.0])
 out = trimesh.Trimesh(V, F, visual=trimesh.visual.TextureVisuals(uv=UV, material=mat), process=False)
 out.export(os.path.join(OUT, NAME + ".glb"))
