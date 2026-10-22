@@ -755,7 +755,10 @@ func _apply_sword_power(en: Node3D) -> void:
 		return
 	var el: String = String(Weapons.get_def(weapon_index)["element"])
 	var frozen: bool = bool(en.call("has_status", "gel")) or bool(en.call("has_status", "para"))
-	if not frozen and not en.get("is_boss") and _atk_i >= 2:
+	if (el == "divin" or is_divine) and not en.get("is_boss"):
+		# Épée Divine / forme divine : chacun des 5 coups propulse l'ennemi
+		en.call("knockback", en.global_position - global_position, 13.0 + 1.5 * float(maxi(_atk_i, 0)))
+	elif not frozen and not en.get("is_boss") and _atk_i >= 2:
 		var dir: Vector3 = en.global_position - global_position
 		en.call("knockback", dir, 11.0 if _atk_i >= 3 else 7.0)
 	if el == "ombre":
