@@ -220,6 +220,11 @@ func _process(delta: float) -> void:
 				print("BILAN dragon pos=", dg2.global_position.snapped(Vector3.ONE), " mode=", dg2.get("_mode"), " d=", int(dd.length()))
 	if _div_req and _n % 10 == 0:
 		print("BILAN geant n=", _n, " k=", player.get("giant_k"), " cible=", player.get("_giant_target"), " rigscale=", (player.get("rig") as Node3D).scale, " scale=", Engine.time_scale)
+	if statut == "demon" and _n == 14 and is_instance_valid(_test_en):
+		var dm: Node3D = load("res://scripts/spirit_demon.gd").new()
+		dm.set("target", _test_en)
+		dm.set("start_pos", player.global_position + Vector3(0.0, 1.5, 0.0))
+		player.get_parent().add_child(dm)
 	if _div_req and _n == 4:
 		player.set("energy", float(player.get("max_energy")))
 		GameInput.divine_buffer = 0.5

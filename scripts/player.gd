@@ -21,6 +21,7 @@ const Sword = preload("res://scripts/sword.gd")
 const CombatFx = preload("res://scripts/combat_fx.gd")
 const Wings = preload("res://scripts/wings.gd")
 const DivineAura = preload("res://scripts/divine_aura.gd")
+const SpiritDemon = preload("res://scripts/spirit_demon.gd")
 const Weapons = preload("res://scripts/weapons.gd")
 const SaveGame = preload("res://scripts/save_game.gd")
 const PlayerShot = preload("res://scripts/player_shot.gd")
@@ -851,6 +852,7 @@ func _update_powers(delta: float) -> void:
 	for k in _tech_cd:
 		_tech_cd[k] = float(_tech_cd[k]) - delta
 	power_cd = maxf(power_cd - delta, 0.0)
+	_demon_spirit(delta)
 	for wk in _wear.keys():
 		_wear[wk] = maxf(float(_wear[wk]) - delta * 1.2, 0.0)
 	if _tp_window > 0.0:
@@ -1063,6 +1065,32 @@ func _equip_weapon(i: int, divine_look: bool) -> void:
 	sw.set("width_scale", float(d["width"]))
 	rig.call("equip_weapon", sw)
 	_set_layer(sw, 2)
+
+
+## Ailes de démon ou Épée du Démon : un démon spectral presque transparent surgit de tes ailes
+## et frappe l'ennemi le plus proche (toutes les 3,5 s, 2 s en forme divine).
+var _demon_cd: float = 2.0
+
+
+func _demon_spirit(delta: float) -> void:
+	if is_dead or action != "" or ulti_t >= 0.0:
+		return
+	if wings_variant != "demon" and _form_element() != "ombre":
+		return
+	_demon_cd -= delta
+	if _demon_cd > 0.0:
+		return
+	var t: Node3D = _nearest_enemy(14.0)
+	if t == null:
+		return
+	_demon_cd = 2.0 if is_divine else 3.5
+	var d: Node3D = SpiritDemon.new()
+	d.set("target", t)
+	d.set("damage", 28.0 * _dmg_mult())
+	d.set("start_pos", global_position + Vector3(0.0, 1.5, 0.0) + Vector3(sin(face_yaw), 0.0, cos(face_yaw)) * 1.0)
+	get_parent().add_child(d)
+	Sfx.play("teleport", 0.6)
+	announce.emit("Démon des ailes !")
 
 
 ## Une épée trop utilisée surchauffe : après WEAR_MAX coups elle est remplacée automatiquement
