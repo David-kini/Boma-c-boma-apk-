@@ -13,6 +13,7 @@ const ELEMENTS: Dictionary = {
 	"eclair": {"core": Color(0.55, 0.80, 1.0), "glow": Color(0.10, 0.35, 1.0, 0.30), "arc": Color(0.75, 0.90, 1.0)},
 	"feu": {"core": Color(1.0, 0.65, 0.30), "glow": Color(1.0, 0.30, 0.05, 0.30), "arc": Color(1.0, 0.6, 0.2)},
 	"divin": {"core": Color(1.0, 0.90, 0.55), "glow": Color(1.0, 0.70, 0.15, 0.30), "arc": Color(1.0, 0.92, 0.6)},
+	"vent": {"core": Color(0.78, 1.0, 0.88), "glow": Color(0.35, 0.95, 0.65, 0.30), "arc": Color(0.85, 1.0, 0.95)},
 	"glace": {"core": Color(0.85, 0.97, 1.0), "glow": Color(0.55, 0.90, 1.0, 0.30), "arc": Color(0.9, 1.0, 1.0)},
 	"vide": {"core": Color(0.75, 0.45, 1.0), "glow": Color(0.45, 0.10, 0.90, 0.32), "arc": Color(0.85, 0.6, 1.0)},
 	"poison": {"core": Color(0.60, 1.0, 0.45), "glow": Color(0.20, 0.85, 0.15, 0.30), "arc": Color(0.7, 1.0, 0.5)},

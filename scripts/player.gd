@@ -790,6 +790,11 @@ func _apply_sword_power(en: Node3D) -> void:
 			CombatFx.bolt(get_parent(), en.global_position + Vector3(0.0, 1.5, 0.0), o.global_position + Vector3(0.0, 1.2, 0.0), Color(1.0, 0.9, 0.5), 0.2)
 			o.call("take_damage", 18.0 * _dmg_mult(), en.global_position)
 			o.call("apply_element", "divin")
+	if el == "vent":
+		# tourbillon : les ennemis voisins valsent aussi
+		for o in _enemies_near(en.global_position, 3.2):
+			if o != en and o.has_method("apply_element"):
+				o.call("apply_element", "vent")
 	en.call("apply_element", el)
 
 
@@ -973,6 +978,7 @@ func _fly_move(delta: float, wish: Vector3, has_input: bool) -> void:
 ## l'élément, et le pouvoir de l'épée frappe en continu tout autour de lui.
 const FORMS: Dictionary = {
 	"feu": {"name": "GÉANT DE FEU", "k": 2.6, "main": Color(1.0, 0.35, 0.05, 0.2), "ring": Color(1.0, 0.5, 0.1, 0.85), "spark": Color(1.0, 0.6, 0.15)},
+	"vent": {"name": "SEIGNEUR DES TEMPÊTES", "k": 2.5, "main": Color(0.4, 1.0, 0.7, 0.2), "ring": Color(0.8, 1.0, 0.9, 0.85), "spark": Color(0.9, 1.0, 0.95)},
 	"glace": {"name": "GÉANT DE GLACE", "k": 2.5, "main": Color(0.5, 0.85, 1.0, 0.2), "ring": Color(0.7, 0.95, 1.0, 0.85), "spark": Color(0.85, 1.0, 1.0)},
 	"eclair": {"name": "TITAN DE L'ÉCLAIR", "k": 2.5, "main": Color(0.3, 0.5, 1.0, 0.2), "ring": Color(0.7, 0.85, 1.0, 0.9), "spark": Color(0.9, 0.95, 1.0)},
 	"poison": {"name": "COLOSSE VENIMEUX", "k": 2.4, "main": Color(0.3, 0.9, 0.2, 0.2), "ring": Color(0.5, 1.0, 0.3, 0.85), "spark": Color(0.7, 1.0, 0.4)},

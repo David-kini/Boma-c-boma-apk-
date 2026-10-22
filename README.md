@@ -193,3 +193,4 @@ Combat, vol, transformation, monstres, armes, menus, sauvegarde : phases 3 à 6.
 - **Niveaux** : un boss par niveau, chacun sur un terrain différent : 1 Roi Squelette (repaire), 2 Seigneur des ombres (bois sombre), 3 Reine de la forêt, 4 Gardien des montagnes (pics), 5 Seigneur des nuages (ciel), 6 Dragon des royaumes (arène). Seul le boss du niveau en cours apparaît (le radar le montre), les ennemis deviennent plus résistants à chaque niveau.
 - **Arc** : touche B ou bouton du menu : l'épée devient un arc, avec son élément et son pouvoir (feu, gel, éclair…) sur chaque flèche. Quand toutes les épées surchauffent (14 s de refroidissement chacune), l'arme actuelle passe automatiquement en arc.
 - **Poison** cumulatif (jusqu'à 6 charges) ; démon des ailes visible ~1 s.
+- **Lame du Vent** (épée ou arc) : élément vent, chaque coup/flèche fait valser l'ennemi en l'air en tournoyant (les ennemis voisins aussi), avec anneaux de vent. Forme divine : Seigneur des tempêtes.

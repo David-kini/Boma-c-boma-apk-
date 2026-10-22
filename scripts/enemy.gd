@@ -414,6 +414,8 @@ var _immune: float = 0.0
 var _dot_t: float = 0.0
 var _spark_t: float = 0.0
 var _poison_stacks: int = 0
+var _vent_held: bool = false
+var _vent_t: float = 0.0
 
 
 func has_status(k: String) -> bool:
@@ -432,6 +434,11 @@ func apply_element(el: String) -> void:
 			_set_status("feu", 5.0)
 		"poison", "ombre":
 			_set_status("poison", 6.0)
+		"vent":
+			if not is_boss:
+				launch(9.0)
+				_vent_held = false
+				_set_status("vent", 1.6)
 		"vide":
 			launch(7.0)
 		"divin":
@@ -513,6 +520,9 @@ func _status_tick(delta: float) -> bool:
 			_st.erase(k)
 			if k == "poison":
 				_poison_stacks = 0
+			if k == "vent" and _model != null:
+				_model.rotation.y = PI
+				_vent_t = 0.0
 			if _st_fx.has(k):
 				if k == "gel":
 					CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.0 * sc, 0.0), Color(0.8, 0.95, 1.0), 1.3)
@@ -546,6 +556,18 @@ func _status_tick(delta: float) -> bool:
 			take_damage(dmg, global_position, true)
 			if state == "dead":
 				return false
+	if _st.has("vent") and _model != null:
+		# valse : l'ennemi tourne sur lui-même, suspendu en l'air, avec des anneaux de vent
+		_vent_t += delta
+		_model.rotation.y += 13.0 * delta
+		if not _vent_held and _vent_t > 0.3 and state == "launched":
+			_vent_held = true
+			air_hold(0.9)
+		_spark_t -= delta
+		if _spark_t <= 0.0:
+			_spark_t = 0.18
+			CombatFx.ring(get_parent(), global_position + Vector3(0.0, 0.4, 0.0), Color(0.8, 1.0, 0.9, 0.7), 1.4, 0.3)
+			CombatFx.spark(get_parent(), global_position + Vector3(0.0, 1.0, 0.0), Color(0.85, 1.0, 0.95), 0.6)
 	if _st.has("para"):
 		_spark_t -= delta
 		if _spark_t <= 0.0:
